@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>模板编辑 - 商城搭建系统</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    body { margin: 0; background: #f5f5f5; }
+    .editor-page { height: 100vh; display: flex; flex-direction: column; }
+    .editor-toolbar { flex-shrink: 0; }
+    .editor-body { flex: 1; display: grid; grid-template-columns: 320px 1fr 280px; min-height: 0; }
+    .editor-side { overflow: hidden; background: #fff; border-right: 1px solid var(--border); display: grid; grid-template-columns: 84px 1fr; min-height: 0; }
+    .editor-side-tabs { padding: 16px 12px; border-right: 1px solid var(--border); background: #fafafa; display: flex; flex-direction: column; gap: 10px; }
+    .editor-side-tab { width: 100%; height: 40px; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--text-secondary); cursor: pointer; font-size: 13px; }
+    .editor-side-tab.active { background: var(--primary-bg); border-color: #91d5ff; color: var(--primary); font-weight: 600; }
+    .editor-side-panel { overflow: auto; padding: 16px; }
+    .editor-panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+    .editor-panel-title { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--text); }
+    .editor-panel-desc { margin: 0 0 14px; font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+    .editor-panel-action { height: 28px; padding: 0 10px; font-size: 12px; }
+    .editor-side-list { display: flex; flex-direction: column; gap: 10px; }
+    .editor-list-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fff; transition: all 0.2s; }
+    .editor-list-item.active { border-color: #91d5ff; background: #f0f7ff; box-shadow: inset 0 0 0 1px rgba(24, 144, 255, 0.15); }
+    .editor-list-item.draggable { cursor: grab; }
+    .editor-list-item.dragging { opacity: 0.55; transform: scale(0.98); }
+    .editor-list-item.drop-target { border-color: var(--primary); background: #f6fbff; box-shadow: inset 0 0 0 1px rgba(24, 144, 255, 0.2); }
+    .editor-list-item-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--text); }
+    .editor-list-item-meta { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .editor-page-item { cursor: pointer; }
+    .floor-item-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+    .floor-action-btn { min-width: 44px; }
+    .page-item-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .page-name-input { flex: 1; height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-size: 13px; color: var(--text); background: #fff; }
+    .page-name-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.12); }
+    .page-default-badge { flex-shrink: 0; font-size: 11px; color: var(--text-muted); background: #f5f5f5; border: 1px solid var(--border); border-radius: 999px; padding: 2px 8px; }
+    .page-delete-btn { flex-shrink: 0; }
+    .editor-page-card { padding: 0; overflow: hidden; }
+    .editor-page-card.active { background: #fff; }
+    .page-card-preview {
+      position: relative;
+      min-height: 150px;
+      padding: 14px;
+      background: linear-gradient(180deg, #eef6ff 0%, #f8fbff 100%);
+      border-bottom: 1px solid #edf2f7;
+    }
+    .page-card-badge {
+      position: absolute;
+      top: 0;
+      left: 0;
+      padding: 5px 12px 5px 10px;
+      font-size: 11px;
+      color: #fff;
+      background: linear-gradient(135deg, #1677ff 0%, #69b1ff 100%);
+      border-bottom-right-radius: 12px;
+      z-index: 1;
+    }
+    .page-card-badge.custom {
+      background: linear-gradient(135deg, #722ed1 0%, #b37feb 100%);
+    }
+    .page-card-delete {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1;
+    }
+    .page-preview-shell {
+      width: 100%;
+      max-width: 172px;
+      margin: 10px auto 0;
+      aspect-ratio: 375 / 640;
+      border-radius: 18px;
+      background: #fff;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.10);
+      border: 1px solid #e8eef5;
+      overflow: hidden;
+    }
+    .page-preview-topbar {
+      padding: 10px 10px 8px;
+      background: rgba(255, 255, 255, 0.96);
+      border-bottom: 1px solid #f0f4f8;
+    }
+    .page-preview-search {
+      height: 18px;
+      border-radius: 9px;
+      background: #f3f6fb;
+    }
+    .page-preview-body {
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .page-preview-block {
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px solid #edf2f7;
+      overflow: hidden;
+    }
+    .page-preview-block.banner { height: 58px; background: linear-gradient(135deg, #ff7875 0%, #ffa39e 100%); border: none; }
+    .page-preview-block.goods-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      background: transparent;
+      border: none;
+    }
+    .page-preview-block.goods-grid span,
+    .page-preview-block.category-entry span {
+      display: block;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #e6f4ff 0%, #91caff 100%);
+    }
+    .page-preview-block.goods-grid span { aspect-ratio: 1; }
+    .page-preview-block.rich-text { height: 52px; background: linear-gradient(180deg, #fff7e6 0%, #fff1f0 100%); border-color: #ffe7ba; }
+    .page-preview-block.category-entry {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      background: transparent;
+      border: none;
+    }
+    .page-preview-block.category-entry span { height: 38px; }
+    .page-preview-block.marketing { height: 50px; background: linear-gradient(135deg, #722ed1 0%, #b37feb 100%); border: none; }
+    .page-preview-block.product-detail {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 8px;
+      padding: 8px;
+      background: #fff;
+    }
+    .page-preview-block.product-detail .thumb { border-radius: 10px; background: linear-gradient(135deg, #fff7e6 0%, #ffd591 100%); }
+    .page-preview-block.product-detail .lines {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      justify-content: center;
+    }
+    .page-preview-block.product-detail .lines span {
+      display: block;
+      height: 8px;
+      border-radius: 4px;
+      background: #e5eaf1;
+    }
+    .page-preview-empty {
+      height: 120px;
+      border: 1px dashed #d6dee8;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.65);
+    }
+    .page-card-content { padding: 12px; }
+    .page-card-stats {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .editor-canvas { overflow: auto; background: #fafafa; padding: 24px; }
+    .editor-canvas-wrap { max-width: 980px; margin: 0 auto; }
+    .editor-canvas-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .editor-canvas-header h3 { margin: 0; font-size: 16px; color: var(--text); }
+    .editor-canvas-header p { margin: 4px 0 0; font-size: 12px; color: var(--text-muted); }
+    .editor-device-stage { display: flex; justify-content: center; }
+    .editor-phone-shell { width: 390px; min-height: 780px; background: #fff; border-radius: 28px; padding: 14px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12); border: 1px solid #e5e7eb; transition: all 0.2s; }
+    .editor-phone-shell.pc-mode { width: 100%; max-width: 920px; min-height: 640px; border-radius: 18px; padding: 20px; }
+    .editor-phone-screen { position: relative; min-height: 740px; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%); border-radius: 20px; border: 1px solid #eef2f7; overflow: hidden; }
+    .editor-phone-shell.pc-mode .editor-phone-screen { min-height: 560px; }
+    .canvas-topbar { padding: 14px 16px 10px; border-bottom: 1px solid #f0f0f0; background: rgba(255, 255, 255, 0.92); }
+    .canvas-searchbar { height: 34px; border-radius: 17px; background: #f3f6fb; color: #b0b8c4; display: flex; align-items: center; padding: 0 14px; font-size: 12px; }
+    .canvas-drop-zone { min-height: 620px; padding: 14px 14px 88px; }
+    .editor-phone-shell.pc-mode .canvas-drop-zone { min-height: 460px; }
+    .canvas-placeholder { min-height: 360px; border: 2px dashed var(--border-strong); border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); font-size: 14px; background: rgba(250, 250, 250, 0.8); gap: 8px; }
+    .canvas-placeholder strong { color: var(--text-secondary); }
+    .canvas-floor-list { display: flex; flex-direction: column; gap: 12px; }
+    .canvas-floor-card { border: 1px solid #edf2f7; border-radius: 16px; background: #fff; overflow: hidden; box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04); }
+    .canvas-floor-card.active { border-color: #91d5ff; box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.12); }
+    .canvas-floor-card.draggable { cursor: grab; }
+    .canvas-floor-card.dragging { opacity: 0.55; transform: scale(0.99); }
+    .canvas-floor-card.drop-target { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.18); }
+    .canvas-floor-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; background: #fbfdff; border-bottom: 1px solid #f0f4f8; }
+    .canvas-floor-head strong { font-size: 14px; color: var(--text); }
+    .canvas-floor-head span { font-size: 12px; color: var(--text-muted); }
+    .canvas-floor-body { padding: 12px 14px 14px; }
+    .canvas-block { border-radius: 14px; }
+    .canvas-block-banner { height: 144px; background: linear-gradient(135deg, #ff7875 0%, #ffa39e 100%); }
+    .canvas-block-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .canvas-block-grid span { aspect-ratio: 1; border-radius: 12px; background: linear-gradient(135deg, #e6f4ff 0%, #91caff 100%); }
+    .canvas-block-rich { height: 120px; background: linear-gradient(180deg, #fef2f2 0%, #ffffff 100%); border: 1px solid #fee2e2; }
+    .canvas-block-category { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .canvas-block-category span { height: 82px; border-radius: 14px; background: linear-gradient(135deg, #f0f5ff 0%, #d6e4ff 100%); }
+    .canvas-block-marketing { height: 110px; background: linear-gradient(135deg, #722ed1 0%, #b37feb 100%); }
+    .canvas-block-detail { display: grid; grid-template-columns: 120px 1fr; gap: 12px; }
+    .canvas-block-detail .thumb { height: 126px; border-radius: 14px; background: linear-gradient(135deg, #fff7e6 0%, #ffd591 100%); }
+    .canvas-block-detail .info { display: flex; flex-direction: column; gap: 10px; }
+    .canvas-block-detail .info span { height: 14px; border-radius: 7px; background: #edf2f7; }
+    .component-item { padding: 12px; border: 1px solid var(--border); border-radius: 10px; cursor: grab; font-size: 13px; background: #fff; transition: all 0.2s; }
+    .component-item:hover { border-color: var(--primary); color: var(--primary); box-shadow: 0 6px 16px rgba(24, 144, 255, 0.12); }
+    .component-item strong { display: block; margin-bottom: 4px; color: var(--text); font-size: 13px; }
+    .component-item span { display: block; font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+    .drag-hover { outline: 2px dashed var(--primary); outline-offset: -8px; background: rgba(24, 144, 255, 0.03); }
+    .canvas-tabbar {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 66px;
+      background: rgba(255, 255, 255, 0.96);
+      border-top: 1px solid #edf2f7;
+      display: flex;
+      align-items: stretch;
+      justify-content: space-around;
+      padding: 6px 8px 8px;
+      backdrop-filter: blur(8px);
+    }
+    .canvas-tabbar-item {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      color: #94a3b8;
+      font-size: 11px;
+      text-align: center;
+    }
+    .canvas-tabbar-item.active { color: var(--primary); }
+    .canvas-tabbar-icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 8px;
+      background: #e2e8f0;
+    }
+    .canvas-tabbar-item.active .canvas-tabbar-icon {
+      background: linear-gradient(135deg, #1677ff 0%, #69b1ff 100%);
+    }
+    .editor-props { overflow: auto; background: #fff; border-left: 1px solid var(--border); padding: 16px; }
+    .editor-props-card { border: 1px solid var(--border); border-radius: 12px; padding: 14px; background: #fff; margin-bottom: 12px; }
+    .editor-props-card h4 { margin: 0 0 8px; font-size: 13px; color: var(--text); }
+    .editor-props-card p { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+    .tabbar-controls { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+    .tabbar-count { min-width: 62px; text-align: center; font-size: 12px; color: var(--text-secondary); }
+    .config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin-top: 12px; }
+    .config-item { display: flex; flex-direction: column; gap: 6px; }
+    .config-item label { font-size: 12px; color: var(--text-secondary); }
+    .config-item input,
+    .config-item select { width: 100%; height: 32px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-size: 12px; background: #fff; }
+    .config-item input[type="color"] { padding: 2px; }
+    .config-item-inline { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+    .config-item-inline label { font-size: 12px; color: var(--text-secondary); }
+    .config-item-inline input[type="checkbox"] { margin: 0; }
+    .tab-config-list { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+    .tab-config-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px; background: #fafcff; }
+    .tab-config-item h5 { margin: 0 0 10px; font-size: 12px; color: var(--text); }
+    .tab-config-note { margin-top: 8px; font-size: 11px; color: var(--text-muted); }
+    .device-switch { display: flex; gap: 8px; }
+    .device-switch button { padding: 4px 12px; font-size: 12px; border: 1px solid var(--border-strong); background: #fff; border-radius: 4px; cursor: pointer; }
+    .device-switch button.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  </style>
+</head>
+<body>
+  <div class="editor-page">
+    <div class="editor-toolbar" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #fff; border-bottom: 1px solid var(--border);">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <a href="index.html" style="color: var(--text-muted); text-decoration: none;">← 返回列表</a>
+        <span id="editor-title">模板编辑</span>
+        <div class="device-switch">
+          <button type="button" class="active" data-device="pc">PC</button>
+          <button type="button" data-device="mobile">移动端</button>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <span style="font-size: 12px; color: var(--text-muted);">已自动保存</span>
+        <button type="button" class="btn btn-ghost btn-sm">预览</button>
+        <button type="button" class="btn btn-primary btn-sm">保存</button>
+        <button type="button" class="btn btn-ghost btn-sm">发布</button>
+      </div>
+    </div>
+    <div class="editor-body">
+      <div class="editor-side">
+        <div class="editor-side-tabs">
+          <button type="button" class="editor-side-tab active" data-panel="pages">页面</button>
+          <button type="button" class="editor-side-tab" data-panel="floors">楼层</button>
+          <button type="button" class="editor-side-tab" data-panel="components">组件</button>
+        </div>
+        <div class="editor-side-panel">
+          <div class="editor-panel-header">
+            <h3 class="editor-panel-title" id="editor-side-title">页面列表</h3>
+            <button type="button" class="btn btn-primary btn-sm editor-panel-action" id="btn-add-page">+ 新增页面</button>
+          </div>
+          <p class="editor-panel-desc" id="editor-side-desc">默认提供一个页面，可切换当前编辑页面。</p>
+          <div class="editor-side-list" id="editor-side-list"></div>
+        </div>
+      </div>
+      <div class="editor-canvas">
+        <div class="editor-canvas-wrap">
+          <div class="editor-canvas-header">
+            <div>
+              <h3 id="canvas-page-title">首页</h3>
+              <p>左侧切换页面 / 楼层 / 组件，组件可拖拽到中间页面中。</p>
+            </div>
+          </div>
+          <div class="editor-device-stage">
+            <div class="editor-phone-shell" id="editor-phone-shell">
+              <div class="editor-phone-screen">
+                <div class="canvas-topbar">
+                  <div class="canvas-searchbar">搜索商品、优惠券、活动</div>
+                </div>
+                <div class="canvas-drop-zone" id="canvas-drop-zone">
+                  <div class="canvas-placeholder" id="canvas-placeholder">
+                    <strong>拖拽左侧组件到此处</strong>
+                    <span>组件会追加到当前页面，并自动生成对应楼层。</span>
+                  </div>
+                  <div class="canvas-floor-list" id="canvas-floor-list"></div>
+                </div>
+                <div class="canvas-tabbar" id="canvas-tabbar"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="editor-props">
+        <h3 style="margin: 0 0 12px; font-size: 13px; color: var(--text-muted);">属性面板</h3>
+        <div class="editor-props-card">
+          <h4>当前选中页面</h4>
+          <p id="props-current-page">首页</p>
+        </div>
+        <div class="editor-props-card">
+          <h4>当前选中楼层</h4>
+          <p id="props-current-floor">未选中楼层，点击中间画布中的楼层后可查看。</p>
+        </div>
+        <div class="editor-props-card">
+          <h4>编辑说明</h4>
+          <p>页面：切换当前编辑页面。楼层：查看当前页面中的楼层结构。组件：从组件库拖拽到中间画布，自动生成对应楼层。</p>
+        </div>
+        <div class="editor-props-card">
+          <h4>底部 Tab 栏</h4>
+          <p>中间页面底部固定展示 Tab 栏，默认显示首页、分类页、我的，最少 1 个，最多 5 个。</p>
+          <div class="tabbar-controls">
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-remove-tab">- 删除</button>
+            <span class="tabbar-count" id="tabbar-count">3 / 5</span>
+            <button type="button" class="btn btn-primary btn-sm" id="btn-add-tab">+ 增加</button>
+          </div>
+          <div class="config-grid">
+            <div class="config-item">
+              <label for="tabbar-default-color">默认颜色</label>
+              <input id="tabbar-default-color" type="color" value="#94a3b8" />
+            </div>
+            <div class="config-item">
+              <label for="tabbar-active-color">选中颜色</label>
+              <input id="tabbar-active-color" type="color" value="#1677ff" />
+            </div>
+            <div class="config-item">
+              <label for="tabbar-font-size">字体大小</label>
+              <input id="tabbar-font-size" type="number" min="10" max="20" value="11" />
+            </div>
+            <div class="config-item">
+              <label for="tabbar-height">整体高度</label>
+              <input id="tabbar-height" type="number" min="56" max="100" value="66" />
+            </div>
+            <div class="config-item">
+              <label for="tabbar-bg-color">背景颜色</label>
+              <input id="tabbar-bg-color" type="color" value="#ffffff" />
+            </div>
+            <div class="config-item">
+              <label for="tabbar-border-color">边线框颜色</label>
+              <input id="tabbar-border-color" type="color" value="#edf2f7" />
+            </div>
+            <div class="config-item">
+              <label for="tabbar-icon-gap">图标与文字间距</label>
+              <input id="tabbar-icon-gap" type="number" min="0" max="16" value="4" />
+            </div>
+          </div>
+          <div class="config-item-inline">
+            <input id="tabbar-show-text" type="checkbox" checked />
+            <label for="tabbar-show-text">显示文字</label>
+          </div>
+          <div class="tab-config-list" id="tab-config-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const name = params.get('name') || '未命名模板';
+      document.getElementById('editor-title').textContent = name;
+      const sideTitle = document.getElementById('editor-side-title');
+      const sideDesc = document.getElementById('editor-side-desc');
+      const sideList = document.getElementById('editor-side-list');
+      const pageTitle = document.getElementById('canvas-page-title');
+      const floorListEl = document.getElementById('canvas-floor-list');
+      const placeholderEl = document.getElementById('canvas-placeholder');
+      const dropZoneEl = document.getElementById('canvas-drop-zone');
+      const propsCurrentPage = document.getElementById('props-current-page');
+      const propsCurrentFloor = document.getElementById('props-current-floor');
+      const phoneShell = document.getElementById('editor-phone-shell');
+      const btnAddPage = document.getElementById('btn-add-page');
+      const canvasTabbar = document.getElementById('canvas-tabbar');
+      const btnAddTab = document.getElementById('btn-add-tab');
+      const btnRemoveTab = document.getElementById('btn-remove-tab');
+      const tabbarCount = document.getElementById('tabbar-count');
+      const tabConfigList = document.getElementById('tab-config-list');
+      const tabbarDefaultColorInput = document.getElementById('tabbar-default-color');
+      const tabbarActiveColorInput = document.getElementById('tabbar-active-color');
+      const tabbarFontSizeInput = document.getElementById('tabbar-font-size');
+      const tabbarShowTextInput = document.getElementById('tabbar-show-text');
+      const tabbarBgColorInput = document.getElementById('tabbar-bg-color');
+      const tabbarHeightInput = document.getElementById('tabbar-height');
+      const tabbarBorderColorInput = document.getElementById('tabbar-border-color');
+      const tabbarIconGapInput = document.getElementById('tabbar-icon-gap');
+
+      const components = [
+        { type: 'banner', name: 'Banner 轮播', desc: '适合展示主视觉、活动促销和推荐专题。' },
+        { type: 'goods-grid', name: '商品网格', desc: '双列/四列商品宫格，适合首页推荐。' },
+        { type: 'rich-text', name: '图文模块', desc: '可承载品牌故事、买点介绍和活动说明。' },
+        { type: 'category-entry', name: '分类入口', desc: '金刚区入口，适合首页导航和频道分发。' },
+        { type: 'marketing', name: '营销活动', desc: '秒杀、拼团、限时购等活动氛围模块。' },
+        { type: 'product-detail', name: '商品详情摘要', desc: '适合承接商品卖点、价格和购买动线。' },
+      ];
+
+      const pageStore = [
+        {
+          id: 'page-home',
+          name: '首页',
+          desc: '默认页面',
+          isDefault: true,
+          floors: [
+            { id: 'floor-banner', type: 'banner', name: 'Banner 轮播', desc: '顶部主视觉焦点图' },
+            { id: 'floor-category', type: 'category-entry', name: '分类入口', desc: '频道导航与快捷入口' },
+          ],
+        },
+        {
+          id: 'page-category',
+          name: '分类页',
+          desc: '默认页面',
+          isDefault: true,
+          floors: [
+            { id: 'floor-category-main', type: 'category-entry', name: '分类入口', desc: '分类导航与频道入口' },
+            { id: 'floor-category-goods', type: 'goods-grid', name: '商品网格', desc: '分类商品推荐区' },
+          ],
+        },
+        {
+          id: 'page-mine',
+          name: '我的页面',
+          desc: '默认页面',
+          isDefault: true,
+          floors: [
+            { id: 'floor-mine-rich', type: 'rich-text', name: '图文模块', desc: '会员信息与权益说明' },
+          ],
+        },
+      ];
+
+      let currentPanel = 'pages';
+      let currentPageId = 'page-home';
+      let selectedFloorId = '';
+      let draggingFloorId = '';
+      const tabbarConfig = {
+        defaultColor: '#94a3b8',
+        activeColor: '#1677ff',
+        fontSize: 11,
+        showText: true,
+        backgroundColor: '#ffffff',
+        height: 66,
+        borderColor: '#edf2f7',
+        iconGap: 4,
+      };
+      let tabItems = [
+        { id: 'tab-home', name: '首页', active: true, targetPageId: 'page-home', defaultIconUrl: '', activeIconUrl: '' },
+        { id: 'tab-category', name: '分类页', active: false, targetPageId: 'page-category', defaultIconUrl: '', activeIconUrl: '' },
+        { id: 'tab-mine', name: '我的', active: false, targetPageId: 'page-mine', defaultIconUrl: '', activeIconUrl: '' },
+      ];
+
+      document.querySelectorAll('.device-switch button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          document.querySelectorAll('.device-switch button').forEach(function (b) { b.classList.remove('active'); });
+          this.classList.add('active');
+          phoneShell.classList.toggle('pc-mode', this.dataset.device === 'pc');
+        });
+      });
+
+      document.querySelectorAll('.editor-side-tab').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          currentPanel = this.dataset.panel;
+          document.querySelectorAll('.editor-side-tab').forEach(function (tab) {
+            tab.classList.toggle('active', tab === btn);
+          });
+          renderSidePanel();
+        });
+      });
+
+      components.forEach(function (component) {
+        component.previewLabel = '拖拽生成 ' + component.name;
+      });
+
+      function getCurrentPage() {
+        return pageStore.find(function (page) { return page.id === currentPageId; }) || pageStore[0];
+      }
+
+      function getComponentByType(type) {
+        return components.find(function (item) { return item.type === type; }) || components[0];
+      }
+
+      function getPagePreviewMarkup(page) {
+        if (!page.floors.length) {
+          return '<div class="page-preview-empty">拖拽组件后生成页面预览</div>';
+        }
+        return page.floors.slice(0, 4).map(function (floor) {
+          if (floor.type === 'banner') {
+            return '<div class="page-preview-block banner"></div>';
+          }
+          if (floor.type === 'goods-grid') {
+            return '<div class="page-preview-block goods-grid"><span></span><span></span><span></span><span></span></div>';
+          }
+          if (floor.type === 'rich-text') {
+            return '<div class="page-preview-block rich-text"></div>';
+          }
+          if (floor.type === 'category-entry') {
+            return '<div class="page-preview-block category-entry"><span></span><span></span><span></span><span></span></div>';
+          }
+          if (floor.type === 'marketing') {
+            return '<div class="page-preview-block marketing"></div>';
+          }
+          return '<div class="page-preview-block product-detail"><div class="thumb"></div><div class="lines"><span></span><span></span><span style="width:70%;"></span></div></div>';
+        }).join('');
+      }
+
+      function normalizeTabTargets() {
+        const fallbackPageId = (pageStore[0] && pageStore[0].id) || '';
+        tabItems = tabItems.map(function (tab) {
+          const targetExists = pageStore.some(function (page) { return page.id === tab.targetPageId; });
+          return {
+            id: tab.id,
+            name: tab.name,
+            active: tab.active,
+            targetPageId: targetExists ? tab.targetPageId : fallbackPageId,
+            defaultIconUrl: tab.defaultIconUrl,
+            activeIconUrl: tab.activeIconUrl,
+          };
+        });
+      }
+
+      function getPageOptionsMarkup(selectedPageId) {
+        return pageStore.map(function (page) {
+          return `<option value="${page.id}" ${page.id === selectedPageId ? 'selected' : ''}>${page.name}</option>`;
+        }).join('');
+      }
+
+      function getTabPlaceholderSvg(label, color, bgColor) {
+        const svg = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+            <rect x="4" y="4" width="40" height="40" rx="14" fill="${bgColor}" />
+            <text x="24" y="29" text-anchor="middle" font-size="18" font-family="Arial, sans-serif" fill="${color}">${label}</text>
+          </svg>
+        `;
+        return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+      }
+
+      function getTabIconSrc(tab, isActive) {
+        const url = isActive ? tab.activeIconUrl : tab.defaultIconUrl;
+        if (url) return url;
+        const label = (tab.name || '页').slice(0, 1);
+        const color = isActive ? '#ffffff' : '#64748b';
+        const bgColor = isActive ? tabbarConfig.activeColor : '#e2e8f0';
+        return getTabPlaceholderSvg(label, color, bgColor);
+      }
+
+      function renderTabbar() {
+        canvasTabbar.style.height = tabbarConfig.height + 'px';
+        canvasTabbar.style.background = tabbarConfig.backgroundColor;
+        canvasTabbar.style.borderTopColor = tabbarConfig.borderColor;
+        canvasTabbar.innerHTML = tabItems.map(function (tab) {
+          const textStyle = [
+            'font-size:' + tabbarConfig.fontSize + 'px',
+            'color:' + (tab.active ? tabbarConfig.activeColor : tabbarConfig.defaultColor),
+            'display:' + (tabbarConfig.showText ? 'inline' : 'none'),
+          ].join(';');
+          return `
+            <div class="canvas-tabbar-item ${tab.active ? 'active' : ''}" data-tab-id="${tab.id}" style="gap:${tabbarConfig.iconGap}px;">
+              <img class="canvas-tabbar-icon" src="${getTabIconSrc(tab, tab.active)}" alt="${tab.name}" style="width:22px;height:22px;border-radius:8px;object-fit:cover;background:transparent;" />
+              <span style="${textStyle}">${tab.name}</span>
+            </div>
+          `;
+        }).join('');
+
+        tabbarCount.textContent = tabItems.length + ' / 5';
+        btnRemoveTab.disabled = tabItems.length <= 1;
+        btnAddTab.disabled = tabItems.length >= 5;
+
+        canvasTabbar.querySelectorAll('.canvas-tabbar-item').forEach(function (item) {
+          item.addEventListener('click', function () {
+            const targetId = this.dataset.tabId || '';
+            tabItems = tabItems.map(function (tab) {
+              return {
+                id: tab.id,
+                name: tab.name,
+                active: tab.id === targetId,
+                targetPageId: tab.targetPageId,
+                defaultIconUrl: tab.defaultIconUrl,
+                activeIconUrl: tab.activeIconUrl,
+              };
+            });
+            const currentTab = tabItems.find(function (tab) { return tab.id === targetId; });
+            if (currentTab && currentTab.targetPageId) {
+              currentPageId = currentTab.targetPageId;
+              selectedFloorId = '';
+              propsCurrentFloor.textContent = '未选中楼层，点击中间画布中的楼层后可查看。';
+              renderCanvas();
+              renderSidePanel();
+            }
+            renderTabbar();
+            renderTabConfigPanel();
+          });
+        });
+      }
+
+      function renderTabConfigPanel() {
+        tabConfigList.innerHTML = tabItems.map(function (tab, index) {
+          return `
+            <div class="tab-config-item" data-tab-config-id="${tab.id}">
+              <h5>Tab ${index + 1} 配置</h5>
+              <div class="config-grid">
+                <div class="config-item">
+                  <label>名称</label>
+                  <input type="text" data-field="name" value="${tab.name}" />
+                </div>
+                <div class="config-item">
+                  <label>选中跳转页面</label>
+                  <select data-field="targetPageId">
+                    ${getPageOptionsMarkup(tab.targetPageId)}
+                  </select>
+                </div>
+                <div class="config-item">
+                  <label>默认图标 URL</label>
+                  <input type="text" data-field="defaultIconUrl" value="${tab.defaultIconUrl || ''}" placeholder="可粘贴图片链接" />
+                </div>
+                <div class="config-item">
+                  <label>选中图标 URL</label>
+                  <input type="text" data-field="activeIconUrl" value="${tab.activeIconUrl || ''}" placeholder="可粘贴图片链接" />
+                </div>
+              </div>
+              <div class="tab-config-note">交互行为：点击当前 Tab 时，切换到“选中跳转页面”对应的页面。</div>
+            </div>
+          `;
+        }).join('');
+
+        tabConfigList.querySelectorAll('[data-tab-config-id]').forEach(function (card) {
+          const tabId = card.dataset.tabConfigId || '';
+          card.querySelectorAll('[data-field]').forEach(function (fieldEl) {
+            fieldEl.addEventListener('input', function () {
+              const field = this.dataset.field || '';
+              tabItems = tabItems.map(function (tab) {
+                if (tab.id !== tabId) return tab;
+                const nextValue = field === 'targetPageId' ? this.value : this.value.trim();
+                return {
+                  id: tab.id,
+                  name: field === 'name' ? (nextValue || '未命名') : tab.name,
+                  active: tab.active,
+                  targetPageId: field === 'targetPageId' ? nextValue : tab.targetPageId,
+                  defaultIconUrl: field === 'defaultIconUrl' ? nextValue : tab.defaultIconUrl,
+                  activeIconUrl: field === 'activeIconUrl' ? nextValue : tab.activeIconUrl,
+                };
+              }, this);
+              renderTabbar();
+              renderTabConfigPanel();
+            });
+            fieldEl.addEventListener('change', function () {
+              this.dispatchEvent(new Event('input'));
+            });
+          });
+        });
+      }
+
+      function clearFloorDropStates() {
+        sideList.querySelectorAll('[data-floor-id]').forEach(function (item) {
+          item.classList.remove('dragging', 'drop-target');
+        });
+        floorListEl.querySelectorAll('[data-floor-id]').forEach(function (item) {
+          item.classList.remove('dragging', 'drop-target');
+        });
+      }
+
+      function moveFloorBefore(targetFloorId) {
+        const currentPage = getCurrentPage();
+        const fromIndex = currentPage.floors.findIndex(function (floor) { return floor.id === draggingFloorId; });
+        const toIndex = currentPage.floors.findIndex(function (floor) { return floor.id === targetFloorId; });
+        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+        const movedFloor = currentPage.floors.splice(fromIndex, 1)[0];
+        const insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+        currentPage.floors.splice(insertIndex, 0, movedFloor);
+      }
+
+      function moveFloorToEnd() {
+        const currentPage = getCurrentPage();
+        const fromIndex = currentPage.floors.findIndex(function (floor) { return floor.id === draggingFloorId; });
+        if (fromIndex === -1 || fromIndex === currentPage.floors.length - 1) return;
+        const movedFloor = currentPage.floors.splice(fromIndex, 1)[0];
+        currentPage.floors.push(movedFloor);
+      }
+
+      function syncFloorViews() {
+        renderCanvas();
+        if (currentPanel === 'floors') renderFloorsPanel();
+      }
+
+      function moveFloorUp(floorId) {
+        const currentPage = getCurrentPage();
+        const index = currentPage.floors.findIndex(function (floor) { return floor.id === floorId; });
+        if (index <= 0) return;
+        const temp = currentPage.floors[index - 1];
+        currentPage.floors[index - 1] = currentPage.floors[index];
+        currentPage.floors[index] = temp;
+      }
+
+      function moveFloorDown(floorId) {
+        const currentPage = getCurrentPage();
+        const index = currentPage.floors.findIndex(function (floor) { return floor.id === floorId; });
+        if (index === -1 || index >= currentPage.floors.length - 1) return;
+        const temp = currentPage.floors[index + 1];
+        currentPage.floors[index + 1] = currentPage.floors[index];
+        currentPage.floors[index] = temp;
+      }
+
+      function deleteFloor(floorId) {
+        const currentPage = getCurrentPage();
+        const nextFloors = currentPage.floors.filter(function (floor) { return floor.id !== floorId; });
+        currentPage.floors = nextFloors;
+        if (selectedFloorId === floorId) {
+          selectedFloorId = '';
+          propsCurrentFloor.textContent = '未选中楼层，点击中间画布中的楼层后可查看。';
+        }
+      }
+
+      function bindFloorSortEvents(container, selector) {
+        container.querySelectorAll(selector).forEach(function (item) {
+          item.setAttribute('draggable', 'true');
+          item.classList.add('draggable');
+          item.addEventListener('dragstart', function (event) {
+            draggingFloorId = this.dataset.floorId || '';
+            this.classList.add('dragging');
+            if (event.dataTransfer) {
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', draggingFloorId);
+              event.dataTransfer.setData('application/x-editor-drag-kind', 'floor');
+            }
+          });
+          item.addEventListener('dragend', function () {
+            clearFloorDropStates();
+            draggingFloorId = '';
+          });
+          item.addEventListener('dragover', function (event) {
+            if (!draggingFloorId || draggingFloorId === this.dataset.floorId) return;
+            event.preventDefault();
+            clearFloorDropStates();
+            this.classList.add('drop-target');
+          });
+          item.addEventListener('drop', function (event) {
+            event.preventDefault();
+            if (!draggingFloorId || draggingFloorId === this.dataset.floorId) return;
+            moveFloorBefore(this.dataset.floorId || '');
+            clearFloorDropStates();
+            syncFloorViews();
+          });
+        });
+      }
+
+      function createFloorMarkup(floor) {
+        if (floor.type === 'banner') {
+          return '<div class="canvas-block canvas-block-banner"></div>';
+        }
+        if (floor.type === 'goods-grid') {
+          return '<div class="canvas-block canvas-block-grid"><span></span><span></span><span></span><span></span></div>';
+        }
+        if (floor.type === 'rich-text') {
+          return '<div class="canvas-block canvas-block-rich"></div>';
+        }
+        if (floor.type === 'category-entry') {
+          return '<div class="canvas-block canvas-block-category"><span></span><span></span><span></span><span></span></div>';
+        }
+        if (floor.type === 'marketing') {
+          return '<div class="canvas-block canvas-block-marketing"></div>';
+        }
+        return '<div class="canvas-block canvas-block-detail"><div class="thumb"></div><div class="info"><span></span><span></span><span></span><span style="width: 65%;"></span></div></div>';
+      }
+
+      function renderCanvas() {
+        const currentPage = getCurrentPage();
+        pageTitle.textContent = currentPage.name;
+        propsCurrentPage.textContent = currentPage.name;
+        placeholderEl.style.display = currentPage.floors.length ? 'none' : 'flex';
+        floorListEl.innerHTML = currentPage.floors.map(function (floor, index) {
+          return `
+            <div class="canvas-floor-card ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
+              <div class="canvas-floor-head">
+                <strong>${index + 1}. ${floor.name}</strong>
+                <span>${floor.desc}</span>
+              </div>
+              <div class="canvas-floor-body">
+                ${createFloorMarkup(floor)}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        floorListEl.querySelectorAll('.canvas-floor-card').forEach(function (card) {
+          card.addEventListener('click', function () {
+            selectedFloorId = this.dataset.floorId || '';
+            const current = getCurrentPage().floors.find(function (floor) { return floor.id === selectedFloorId; });
+            propsCurrentFloor.textContent = current ? current.name + ' · ' + current.desc : '未选中楼层，点击中间画布中的楼层后可查看。';
+            renderCanvas();
+            if (currentPanel === 'floors') renderSidePanel();
+          });
+        });
+        bindFloorSortEvents(floorListEl, '.canvas-floor-card');
+      }
+
+      function renderPagesPanel() {
+        sideTitle.textContent = '页面列表';
+        sideDesc.textContent = '默认包含首页、分类页、我的页面；支持新增页面，默认页面不可删除。';
+        btnAddPage.style.display = 'inline-flex';
+        sideList.innerHTML = pageStore.map(function (page) {
+          return `
+            <div class="editor-list-item editor-page-item editor-page-card ${page.id === currentPageId ? 'active' : ''}" data-page-id="${page.id}">
+              <div class="page-card-preview">
+                <span class="page-card-badge ${page.isDefault ? '' : 'custom'}">${page.isDefault ? '默认页面' : '自定义页面'}</span>
+                ${page.isDefault ? '' : '<button type="button" class="btn btn-danger btn-sm page-delete-btn page-card-delete" data-page-delete-id="' + page.id + '">删除</button>'}
+                <div class="page-preview-shell">
+                  <div class="page-preview-topbar">
+                    <div class="page-preview-search"></div>
+                  </div>
+                  <div class="page-preview-body">
+                    ${getPagePreviewMarkup(page)}
+                  </div>
+                </div>
+              </div>
+              <div class="page-card-content">
+                <div class="page-item-header">
+                  <input class="page-name-input" data-page-name-id="${page.id}" value="${page.name}" />
+                </div>
+                <div class="editor-list-item-meta">${page.isDefault ? '系统预置页面，不支持删除。' : '自定义页面，可修改名称或删除。'}</div>
+                <div class="page-card-stats">
+                  <span>${page.floors.length} 个楼层</span>
+                  <span>${page.desc}</span>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        sideList.querySelectorAll('.editor-page-item').forEach(function (item) {
+          item.addEventListener('click', function (event) {
+            if (event && event.target && (event.target.closest('.page-delete-btn') || event.target.classList.contains('page-name-input'))) return;
+            currentPageId = this.dataset.pageId || currentPageId;
+            selectedFloorId = '';
+            propsCurrentFloor.textContent = '未选中楼层，点击中间画布中的楼层后可查看。';
+            renderSidePanel();
+            renderCanvas();
+          });
+        });
+
+        sideList.querySelectorAll('[data-page-name-id]').forEach(function (inputEl) {
+          inputEl.addEventListener('click', function (event) {
+            event.stopPropagation();
+          });
+          inputEl.addEventListener('input', function (event) {
+            event.stopPropagation();
+            const pageId = this.dataset.pageNameId || '';
+            const nextName = this.value.trim() || '未命名页面';
+            pageStore.forEach(function (page) {
+              if (page.id === pageId) page.name = nextName;
+            });
+            if (currentPageId === pageId) {
+              renderCanvas();
+            }
+            renderTabConfigPanel();
+          });
+        });
+
+        sideList.querySelectorAll('[data-page-delete-id]').forEach(function (btn) {
+          btn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            const pageId = this.dataset.pageDeleteId || '';
+            const pageIndex = pageStore.findIndex(function (page) { return page.id === pageId; });
+            if (pageIndex === -1 || pageStore[pageIndex].isDefault) return;
+            pageStore.splice(pageIndex, 1);
+            if (currentPageId === pageId) {
+              currentPageId = (pageStore[0] && pageStore[0].id) || '';
+              selectedFloorId = '';
+              propsCurrentFloor.textContent = '未选中楼层，点击中间画布中的楼层后可查看。';
+            }
+            normalizeTabTargets();
+            renderPagesPanel();
+            renderCanvas();
+            renderTabbar();
+            renderTabConfigPanel();
+          });
+        });
+      }
+
+      function renderFloorsPanel() {
+        const currentPage = getCurrentPage();
+        sideTitle.textContent = '楼层列表';
+        sideDesc.textContent = '展示当前选中页面的楼层结构，可拖拽楼层调整上下位置。';
+        btnAddPage.style.display = 'none';
+        sideList.innerHTML = currentPage.floors.map(function (floor, index) {
+          return `
+            <div class="editor-list-item ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
+              <div class="editor-list-item-title">
+                <span>${index + 1}. ${floor.name}</span>
+                <span>${getComponentByType(floor.type).name}</span>
+              </div>
+              <div class="editor-list-item-meta">${floor.desc}</div>
+              <div class="floor-item-actions">
+                <button type="button" class="btn btn-ghost btn-sm floor-action-btn" data-floor-up-id="${floor.id}" ${index === 0 ? 'disabled' : ''}>上移</button>
+                <button type="button" class="btn btn-ghost btn-sm floor-action-btn" data-floor-down-id="${floor.id}" ${index === currentPage.floors.length - 1 ? 'disabled' : ''}>下移</button>
+                <button type="button" class="btn btn-danger btn-sm floor-action-btn" data-floor-delete-id="${floor.id}">删除</button>
+              </div>
+            </div>
+          `;
+        }).join('') || '<div class="editor-list-item"><div class="editor-list-item-meta">当前页面还没有楼层，请从组件库拖拽组件到中间页面。</div></div>';
+
+        sideList.querySelectorAll('[data-floor-id]').forEach(function (item) {
+          item.addEventListener('click', function () {
+            selectedFloorId = this.dataset.floorId || '';
+            const current = currentPage.floors.find(function (floor) { return floor.id === selectedFloorId; });
+            propsCurrentFloor.textContent = current ? current.name + ' · ' + current.desc : '未选中楼层，点击中间画布中的楼层后可查看。';
+            renderFloorsPanel();
+            renderCanvas();
+          });
+        });
+        sideList.querySelectorAll('[data-floor-up-id]').forEach(function (btn) {
+          btn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            moveFloorUp(this.dataset.floorUpId || '');
+            syncFloorViews();
+          });
+        });
+        sideList.querySelectorAll('[data-floor-down-id]').forEach(function (btn) {
+          btn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            moveFloorDown(this.dataset.floorDownId || '');
+            syncFloorViews();
+          });
+        });
+        sideList.querySelectorAll('[data-floor-delete-id]').forEach(function (btn) {
+          btn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            deleteFloor(this.dataset.floorDeleteId || '');
+            syncFloorViews();
+          });
+        });
+        bindFloorSortEvents(sideList, '.editor-list-item[data-floor-id]');
+      }
+
+      function renderComponentsPanel() {
+        sideTitle.textContent = '组件库';
+        sideDesc.textContent = '点击左侧“组件”后展示组件库，所有组件均可拖拽到中间页面。';
+        btnAddPage.style.display = 'none';
+        sideList.innerHTML = components.map(function (component) {
+          return `
+            <div class="component-item" draggable="true" data-component-type="${component.type}">
+              <strong>${component.name}</strong>
+              <span>${component.desc}</span>
+            </div>
+          `;
+        }).join('');
+
+        sideList.querySelectorAll('.component-item').forEach(function (item) {
+          item.addEventListener('dragstart', function (event) {
+            if (event.dataTransfer) {
+              event.dataTransfer.setData('text/plain', this.dataset.componentType || '');
+              event.dataTransfer.setData('application/x-editor-drag-kind', 'component');
+            }
+          });
+        });
+      }
+
+      function renderSidePanel() {
+        if (currentPanel === 'pages') {
+          renderPagesPanel();
+          return;
+        }
+        if (currentPanel === 'floors') {
+          renderFloorsPanel();
+          return;
+        }
+        renderComponentsPanel();
+      }
+
+      dropZoneEl.addEventListener('dragover', function (event) {
+        event.preventDefault();
+        dropZoneEl.classList.add('drag-hover');
+      });
+
+      dropZoneEl.addEventListener('dragleave', function () {
+        dropZoneEl.classList.remove('drag-hover');
+      });
+
+      dropZoneEl.addEventListener('drop', function (event) {
+        event.preventDefault();
+        dropZoneEl.classList.remove('drag-hover');
+        const dragKind = event.dataTransfer.getData('application/x-editor-drag-kind');
+        const type = event.dataTransfer.getData('text/plain');
+        if (dragKind === 'floor') {
+          if (draggingFloorId) {
+            moveFloorToEnd();
+            clearFloorDropStates();
+            syncFloorViews();
+          }
+          return;
+        }
+        if (!type || dragKind !== 'component') return;
+        if (!components.some(function (component) { return component.type === type; })) return;
+        const component = getComponentByType(type);
+        const currentPage = getCurrentPage();
+        const newFloor = {
+          id: 'floor-' + Date.now(),
+          type: component.type,
+          name: component.name,
+          desc: component.previewLabel,
+        };
+        currentPage.floors.push(newFloor);
+        selectedFloorId = newFloor.id;
+        propsCurrentFloor.textContent = newFloor.name + ' · ' + newFloor.desc;
+        syncFloorViews();
+      });
+
+      btnAddPage.addEventListener('click', function () {
+        const nextIndex = pageStore.length + 1;
+        const newPage = {
+          id: 'page-' + Date.now(),
+          name: '页面' + nextIndex,
+          desc: '自定义页面',
+          isDefault: false,
+          floors: [],
+        };
+        pageStore.push(newPage);
+        currentPageId = newPage.id;
+        selectedFloorId = '';
+        propsCurrentFloor.textContent = '未选中楼层，点击中间画布中的楼层后可查看。';
+        renderPagesPanel();
+        renderCanvas();
+        renderTabConfigPanel();
+      });
+
+      btnAddTab.addEventListener('click', function () {
+        if (tabItems.length >= 5) return;
+        const nextIndex = tabItems.length + 1;
+        tabItems = tabItems.map(function (tab) {
+          return {
+            id: tab.id,
+            name: tab.name,
+            active: false,
+            targetPageId: tab.targetPageId,
+            defaultIconUrl: tab.defaultIconUrl,
+            activeIconUrl: tab.activeIconUrl,
+          };
+        });
+        tabItems.push({
+          id: 'tab-' + Date.now(),
+          name: nextIndex === 1 ? '首页' : 'Tab' + nextIndex,
+          active: true,
+          targetPageId: currentPageId,
+          defaultIconUrl: '',
+          activeIconUrl: '',
+        });
+        renderTabbar();
+        renderTabConfigPanel();
+      });
+
+      btnRemoveTab.addEventListener('click', function () {
+        if (tabItems.length <= 1) return;
+        const activeIndex = tabItems.findIndex(function (tab) { return tab.active; });
+        tabItems = tabItems.filter(function (_, index) { return index !== activeIndex; });
+        if (!tabItems.some(function (tab) { return tab.active; })) {
+          tabItems[tabItems.length - 1].active = true;
+        }
+        renderTabbar();
+        renderTabConfigPanel();
+      });
+
+      [
+        [tabbarDefaultColorInput, 'defaultColor', 'change'],
+        [tabbarActiveColorInput, 'activeColor', 'change'],
+        [tabbarFontSizeInput, 'fontSize', 'input'],
+        [tabbarBgColorInput, 'backgroundColor', 'change'],
+        [tabbarHeightInput, 'height', 'input'],
+        [tabbarBorderColorInput, 'borderColor', 'change'],
+        [tabbarIconGapInput, 'iconGap', 'input'],
+      ].forEach(function (entry) {
+        const input = entry[0];
+        const key = entry[1];
+        const eventName = entry[2];
+        input.addEventListener(eventName, function () {
+          const value = key === 'fontSize' || key === 'height' || key === 'iconGap' ? Number(this.value) : this.value;
+          tabbarConfig[key] = value;
+          renderTabbar();
+        });
+      });
+
+      tabbarShowTextInput.addEventListener('change', function () {
+        tabbarConfig.showText = this.checked;
+        renderTabbar();
+      });
+
+      phoneShell.classList.add('pc-mode');
+      renderSidePanel();
+      renderCanvas();
+      renderTabbar();
+      renderTabConfigPanel();
+    })();
+  </script>
+</body>
+</html>
