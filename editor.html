@@ -144,6 +144,28 @@
     }
     .page-preview-block.category-entry span { height: 38px; }
     .page-preview-block.marketing { height: 50px; background: linear-gradient(135deg, #722ed1 0%, #b37feb 100%); border: none; }
+    .page-preview-block.category-showcase {
+      position: relative;
+      height: 132px;
+      padding: 8px;
+      border: none;
+      background: #f5f4f0;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .page-preview-block.category-showcase .mini-wrap { display: grid; grid-template-columns: 32px 1fr; height: 100%; border-radius: 10px; overflow: hidden; background: #fff; }
+    .page-preview-block.category-showcase .mini-nav { background: #fff; border-right: 1px solid #eee9df; display: flex; flex-direction: column; gap: 6px; padding: 6px 4px; }
+    .page-preview-block.category-showcase .mini-nav span { height: 16px; border-radius: 6px; background: #eef0f4; }
+    .page-preview-block.category-showcase .mini-nav span.active { background: #ece9ff; position: relative; }
+    .page-preview-block.category-showcase .mini-nav span.active::before { content: ''; position: absolute; left: -4px; top: 1px; bottom: 1px; width: 2px; border-radius: 2px; background: #3b30c4; }
+    .page-preview-block.category-showcase .mini-main { padding: 6px; background: #f5f4f0; display: flex; flex-direction: column; gap: 5px; }
+    .page-preview-block.category-showcase .mini-banner { height: 24px; border-radius: 8px; background: linear-gradient(135deg, #3b30c4 0%, #5b7cff 100%); }
+    .page-preview-block.category-showcase .mini-sec-title { height: 7px; width: 52%; border-radius: 4px; background: #ebe8ff; position: relative; margin-top: 2px; }
+    .page-preview-block.category-showcase .mini-sec-title::before { content: ''; position: absolute; left: -5px; top: 1px; bottom: 1px; width: 2px; border-radius: 2px; background: #3b30c4; }
+    .page-preview-block.category-showcase .mini-sec-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .page-preview-block.category-showcase .mini-sec-grid span { height: 14px; border-radius: 6px; background: linear-gradient(135deg, #d8e4ff 0%, #afc6ff 100%); }
+    .page-preview-block.category-showcase .mini-third-list { display: flex; flex-direction: column; gap: 4px; }
+    .page-preview-block.category-showcase .mini-third-list span { height: 8px; border-radius: 4px; background: #fff; border: 1px solid #ece8de; }
     .page-preview-block.product-detail {
       display: grid;
       grid-template-columns: 52px 1fr;
@@ -198,12 +220,29 @@
     .canvas-topbar { padding: 14px 16px 10px; border-bottom: 1px solid #f0f0f0; background: rgba(255, 255, 255, 0.92); }
     .canvas-searchbar { height: 34px; border-radius: 17px; background: #f3f6fb; color: #b0b8c4; display: flex; align-items: center; padding: 0 14px; font-size: 12px; }
     .canvas-drop-zone { position: relative; z-index: 5; min-height: 620px; padding: 14px 14px 88px 14px; }
+    .canvas-drop-zone.category-showcase-mode { padding: 0; background: #f5f4f0; }
     .editor-phone-shell.pc-mode .canvas-drop-zone { min-height: 460px; }
     .canvas-placeholder { min-height: 360px; border: 2px dashed var(--border-strong); border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); font-size: 14px; background: rgba(250, 250, 250, 0.8); gap: 8px; }
     .canvas-placeholder strong { color: var(--text-secondary); }
     .canvas-floor-list { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+    .canvas-floor-list.category-showcase-mode { gap: 0; }
     .canvas-floor-card { position: relative; width: 100%; border: 1px solid #edf2f7; border-radius: 16px; background: #fff; overflow: hidden; box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04); }
     .canvas-floor-card.active { border-color: #91d5ff; box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.12); }
+    .canvas-floor-card.category-showcase-card {
+      border: none;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      overflow: visible;
+      margin: 0;
+    }
+    .canvas-floor-card.category-showcase-card .canvas-floor-body {
+      padding: 0;
+      border-radius: 0;
+    }
+    .canvas-floor-card.category-showcase-card.active .canvas-block-category-showcase {
+      box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.14);
+    }
     .canvas-floor-card.draggable { cursor: grab; }
     .canvas-floor-card.dragging { opacity: 0.55; transform: scale(0.99); }
     .canvas-floor-card.drop-target { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.18); }
@@ -232,6 +271,190 @@
     .canvas-block-category { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
     .canvas-block-category span { height: 82px; border-radius: 14px; background: linear-gradient(135deg, #f0f5ff 0%, #d6e4ff 100%); }
     .canvas-block-marketing { height: 110px; background: linear-gradient(135deg, #722ed1 0%, #b37feb 100%); }
+    .canvas-block-category-showcase {
+      border-radius: 0;
+      border: none;
+      background: transparent;
+      overflow: visible;
+    }
+    .canvas-block-category-showcase .cat-page {
+      width: 100%;
+      min-height: 620px;
+      background: #f5f4f0;
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      position: relative;
+      padding-bottom: 0;
+    }
+    .canvas-block-category-showcase .cat-left {
+      background: #fff;
+      border-right: 1px solid #eee9df;
+      padding: 10px 0 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .canvas-block-category-showcase .cat-nav-item {
+      position: relative;
+      margin: 0;
+      border-radius: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 11px 8px 11px 12px;
+      color: #66707d;
+      font-size: 12px;
+      background: #fff;
+      line-height: 1;
+    }
+    .canvas-block-category-showcase .cat-nav-item.active {
+      color: #ff5b2e;
+      background: #fff;
+      font-weight: 600;
+    }
+    .canvas-block-category-showcase .cat-nav-item.active::before {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: 10px;
+      bottom: 10px;
+      width: 2px;
+      border-radius: 2px;
+      background: #ff5b2e;
+    }
+    .canvas-block-category-showcase .cat-right {
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 12px 0 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .canvas-block-category-showcase .cat-banner {
+      height: 86px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #ff8a80 0%, #ff6a5a 45%, #ff4e3f 100%);
+      color: #fff;
+      padding: 0;
+      display: flex;
+      margin: 0 10px;
+      overflow: hidden;
+      position: relative;
+    }
+    .canvas-block-category-showcase .cat-banner-track {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      transition: transform 0.45s cubic-bezier(0.25, 0.1, 0.25, 1);
+    }
+    .canvas-block-category-showcase .cat-banner-track.cat-banner-track--instant {
+      transition: none !important;
+    }
+    .canvas-block-category-showcase .cat-banner-slide {
+      flex: 0 0 100%;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      padding: 12px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background-size: cover;
+      background-position: center;
+    }
+    .canvas-block-category-showcase .cat-banner-slide--image {
+      padding: 0;
+      display: block;
+    }
+    .canvas-block-category-showcase .cat-banner-slide--image .cat-banner-slide-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      vertical-align: top;
+    }
+    .canvas-block-category-showcase .cat-banner-slide-link {
+      position: absolute;
+      inset: 0;
+      z-index: 2;
+      display: block;
+    }
+    .canvas-block-category-showcase .cat-banner-title { font-size: 14px; font-weight: 700; line-height: 1.35; text-shadow: 0 1px 2px rgba(0,0,0,0.18); }
+    .canvas-block-category-showcase .cat-banner-cta {
+      margin-top: 8px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 74px;
+      height: 26px;
+      border-radius: 13px;
+      background: rgba(255, 255, 255, 0.24);
+      border: 1px solid rgba(255, 255, 255, 0.44);
+      font-size: 11px;
+    }
+    .canvas-block-category-showcase .cat-banner-emoji { font-size: 28px; }
+    .canvas-block-category-showcase .cat-banner-dots {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      display: flex;
+      gap: 4px;
+      z-index: 2;
+    }
+    .canvas-block-category-showcase .cat-banner-dots span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.5);
+    }
+    .canvas-block-category-showcase .cat-banner-dots span.active {
+      background: rgba(255,255,255,0.95);
+    }
+    .canvas-block-category-showcase .cat-second-wrap {
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px 10px 12px;
+      border: 1px solid #ece8de;
+      margin: 0 10px;
+    }
+    .canvas-block-category-showcase .cat-second-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #3b3f46;
+      margin-bottom: 10px;
+    }
+    .canvas-block-category-showcase .cat-second-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px 6px;
+    }
+    .canvas-block-category-showcase .cat-second-item { text-align: center; }
+    .canvas-block-category-showcase .cat-second-icon {
+      width: 52px;
+      height: 40px;
+      border-radius: 6px;
+      margin: 0 auto 6px;
+      background: linear-gradient(135deg, #e8edf6 0%, #cfd8e6 100%);
+    }
+    .canvas-block-category-showcase .cat-second-icon.blue { background: linear-gradient(135deg, #dbe6ff 0%, #b8ccff 100%); }
+    .canvas-block-category-showcase .cat-second-icon.green { background: linear-gradient(135deg, #dcf4e8 0%, #b6e3cd 100%); }
+    .canvas-block-category-showcase .cat-second-icon.orange { background: linear-gradient(135deg, #ffe8cb 0%, #ffd19f 100%); }
+    .canvas-block-category-showcase .cat-second-text { font-size: 12px; color: #4f5866; }
+    .canvas-block-category-showcase .cat-third-wrap {
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      border: 1px solid #ece8de;
+      margin: 0 10px;
+    }
+    .canvas-block-category-showcase .cat-third-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #3b3f46;
+      margin-bottom: 10px;
+    }
+    
     .canvas-block-detail { display: grid; grid-template-columns: 120px 1fr; gap: 12px; }
     .canvas-block-detail .thumb { height: 126px; border-radius: 14px; background: linear-gradient(135deg, #fff7e6 0%, #ffd591 100%); }
     .canvas-block-detail .info { display: flex; flex-direction: column; gap: 10px; }
@@ -506,8 +729,20 @@
           isDefault: true,
           pageType: 'main',
           floors: [
-            { id: 'floor-category-main', type: 'category-entry', name: '分类入口', desc: '分类导航与频道入口' },
-            { id: 'floor-category-goods', type: 'goods-grid', name: '商品网格', desc: '分类商品推荐区' },
+            {
+              id: 'floor-category-showcase',
+              type: 'category-showcase',
+              name: '分类页内容',
+              desc: '左侧分类导航 + 右侧分类内容',
+              bannerConfig: {
+                intervalMs: 5000,
+                radius: 12,
+                loop: true,
+                slides: [
+                  { image: '', link: '', title: '12·12 年终大促\n数码好物低至 5 折', cta: '立即抢购', emoji: '🎮', bg: 'linear-gradient(135deg, #ff8a80 0%, #ff6a5a 45%, #ff4e3f 100%)' },
+                ],
+              },
+            },
           ],
         },
         {
@@ -559,6 +794,7 @@
       let currentPageGroup = 'main';
       let selectedFloorId = '';
       let draggingFloorId = '';
+      const bannerAutoplayTimers = {};
       const tabbarConfig = {
         defaultColor: '#94a3b8',
         activeColor: '#1677ff',
@@ -649,7 +885,119 @@
         return getCurrentPage().floors.find(function (floor) { return floor.id === selectedFloorId; }) || null;
       }
 
+      /**
+       * 将字符串转义为可安全放入 HTML 属性中的值。
+       * @param {string} value 原始文本
+       * @returns {string}
+       */
+      function escapeHtmlAttr(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      function ensureCategoryBannerConfig(floor) {
+        if (!floor || floor.type !== 'category-showcase') return null;
+        if (!floor.bannerConfig) floor.bannerConfig = {};
+        if (!Array.isArray(floor.bannerConfig.slides) || !floor.bannerConfig.slides.length) {
+          floor.bannerConfig.slides = [
+            {
+              image: '',
+              link: '',
+              title: '12·12 年终大促\n数码好物低至 5 折',
+              cta: '立即抢购',
+              emoji: '🎮',
+              bg: 'linear-gradient(135deg, #ff8a80 0%, #ff6a5a 45%, #ff4e3f 100%)',
+            },
+          ];
+        }
+        floor.bannerConfig.slides = floor.bannerConfig.slides.map(function (slide) {
+          return {
+            image: slide.image != null ? String(slide.image) : '',
+            link: slide.link != null ? String(slide.link) : '',
+            title: slide.title,
+            cta: slide.cta,
+            emoji: slide.emoji,
+            bg: slide.bg,
+          };
+        });
+        if (!floor.bannerConfig.intervalMs || Number.isNaN(Number(floor.bannerConfig.intervalMs))) {
+          floor.bannerConfig.intervalMs = 5000;
+        }
+        if (floor.bannerConfig.radius === undefined || Number.isNaN(Number(floor.bannerConfig.radius))) {
+          floor.bannerConfig.radius = 12;
+        }
+        if (floor.bannerConfig.loop === undefined) {
+          floor.bannerConfig.loop = true;
+        }
+        return floor.bannerConfig;
+      }
+
+      /**
+       * 生成分类页 Banner 多图配置行的 HTML。
+       * @param {Array<{ image?: string, link?: string }>} slides 轮播项
+       * @returns {string}
+       */
+      function getCategoryBannerRowsMarkup(slides) {
+        return slides
+          .map(function (slide, index) {
+            return (
+              '<div class="category-banner-row" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafafa;">' +
+              '<div class="config-item" style="grid-column:1 / -1;margin-bottom:8px;">' +
+              '<label style="display:block;margin-bottom:6px;">图片 ' +
+              (index + 1) +
+              '</label>' +
+              '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+              '<input type="text" class="banner-img-url" data-index="' +
+              index +
+              '" value="' +
+              escapeHtmlAttr(slide.image || '') +
+              '" placeholder="粘贴图片 URL" style="flex:1;min-width:160px;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;" />' +
+              '<label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0;">选择文件<input type="file" class="banner-img-file" data-index="' +
+              index +
+              '" accept="image/*" style="display:none;" /></label>' +
+              '</div></div>' +
+              '<div class="config-item" style="grid-column:1 / -1;margin-bottom:8px;">' +
+              '<label style="display:block;margin-bottom:6px;">跳转链接</label>' +
+              '<input type="text" class="banner-img-link" data-index="' +
+              index +
+              '" value="' +
+              escapeHtmlAttr(slide.link || '') +
+              '" placeholder="https:// 或 /pages/..." style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;" />' +
+              '</div>' +
+              '<button type="button" class="btn btn-danger btn-sm banner-row-remove" data-index="' +
+              index +
+              '">删除此图</button>' +
+              '</div>'
+            );
+          })
+          .join('');
+      }
+
       function getPagePreviewMarkup(page) {
+        if (page.id === 'page-category-1') {
+          return `
+            <div class="page-preview-block category-showcase">
+              <div class="mini-wrap">
+                <div class="mini-nav">
+                  <span></span>
+                  <span class="active"></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="mini-main">
+                  <div class="mini-banner"></div>
+                  <div class="mini-sec-title"></div>
+                  <div class="mini-sec-grid"><span></span><span></span><span></span><span></span></div>
+                  <div class="mini-sec-title" style="width:48%;"></div>
+                  <div class="mini-third-list"><span></span><span></span><span></span></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
         if (!page.floors.length) {
           return '<div class="page-preview-empty">拖拽组件后生成页面预览</div>';
         }
@@ -668,6 +1016,27 @@
           }
           if (floor.type === 'marketing') {
             return '<div class="page-preview-block marketing"></div>';
+          }
+          if (floor.type === 'category-showcase') {
+            return `
+              <div class="page-preview-block category-showcase">
+                <div class="mini-wrap">
+                  <div class="mini-nav">
+                    <span></span>
+                    <span class="active"></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <div class="mini-main">
+                    <div class="mini-banner"></div>
+                    <div class="mini-sec-title"></div>
+                    <div class="mini-sec-grid"><span></span><span></span><span></span><span></span></div>
+                    <div class="mini-sec-title" style="width:48%;"></div>
+                    <div class="mini-third-list"><span></span><span></span><span></span></div>
+                  </div>
+                </div>
+              </div>
+            `;
           }
           return '<div class="page-preview-block product-detail"><div class="thumb"></div><div class="lines"><span></span><span></span><span style="width:70%;"></span></div></div>';
         }).join('');
@@ -732,6 +1101,28 @@
         if (floor.type === 'marketing') {
           return '<div class="config-grid"><div class="config-item"><label>活动类型</label><select><option>秒杀</option><option>拼团</option><option>限时购</option></select></div><div class="config-item"><label>主题颜色</label><input type="color" value="#722ed1" /></div><div class="config-item"><label>是否显示倒计时</label><select><option>显示</option><option>隐藏</option></select></div><div class="config-item"><label>活动数量</label><input value="4" /></div></div>';
         }
+        if (floor.type === 'category-showcase') {
+          const bannerConfig = ensureCategoryBannerConfig(floor);
+          return (
+            '<div class="config-grid">' +
+            '<div class="config-item" style="grid-column:1 / -1;">' +
+            '<label>Banner 轮播图</label>' +
+            '<div id="category-banner-rows">' +
+            getCategoryBannerRowsMarkup(bannerConfig.slides) +
+            '</div>' +
+            '<button type="button" class="btn btn-primary btn-sm" id="category-banner-add" style="margin-top:6px;">+ 添加图片</button>' +
+            '<div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-top:8px;">支持多张图片；仅一张时不轮播。多张时为<strong>同向无缝循环</strong>：始终向左切换，最后一张继续滑入与首张相同的衔接帧后再瞬间对齐到第一张，避免反向闪跳。每张可填跳转链接。可粘贴图片 URL 或点击「选择文件」添加本地图（原型内预览）。</div>' +
+            '</div>' +
+            '<div class="config-item"><label>轮播类型</label><select id="category-banner-loop" disabled style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:#f5f5f5;color:var(--text);cursor:not-allowed;"><option value="loop" selected>循环轮播（同向无缝）</option></select></div>' +
+            '<div class="config-item"><label>轮播间隔（毫秒）</label><input id="category-banner-interval" type="number" min="1000" step="500" value="' +
+            Number(bannerConfig.intervalMs || 5000) +
+            '" /></div>' +
+            '<div class="config-item"><label>圆角（px，0 为直角）</label><input id="category-banner-radius" type="number" min="0" max="24" step="1" value="' +
+            Number(bannerConfig.radius || 12) +
+            '" /></div>' +
+            '</div>'
+          );
+        }
         return '<div class="config-grid"><div class="config-item"><label>主图比例</label><select><option>1:1</option><option>3:4</option><option>16:9</option></select></div><div class="config-item"><label>价格展示</label><select><option>显示</option><option>隐藏</option></select></div><div class="config-item"><label>按钮文案</label><input value="立即购买" /></div><div class="config-item"><label>卖点数量</label><input value="3" /></div></div>';
       }
 
@@ -746,6 +1137,89 @@
         propsCurrentFloor.textContent = currentFloor.name + ' · ' + currentFloor.desc;
         propsComponentPanel.className = '';
         propsComponentPanel.innerHTML = getComponentPropsMarkup(currentFloor);
+
+        if (currentFloor.type === 'category-showcase') {
+          const bannerConfig = ensureCategoryBannerConfig(currentFloor);
+          const intervalInput = document.getElementById('category-banner-interval');
+          const radiusInput = document.getElementById('category-banner-radius');
+          const addBtn = document.getElementById('category-banner-add');
+
+          if (addBtn) {
+            addBtn.addEventListener('click', function () {
+              bannerConfig.slides.push({ image: '', link: '' });
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          }
+
+          propsComponentPanel.querySelectorAll('.banner-img-url').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              const idx = Number(this.dataset.index);
+              if (!bannerConfig.slides[idx]) return;
+              bannerConfig.slides[idx].image = this.value.trim();
+              renderCanvas();
+            });
+          });
+
+          propsComponentPanel.querySelectorAll('.banner-img-link').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              const idx = Number(this.dataset.index);
+              if (!bannerConfig.slides[idx]) return;
+              bannerConfig.slides[idx].link = this.value.trim();
+            });
+          });
+
+          propsComponentPanel.querySelectorAll('.banner-row-remove').forEach(function (btnEl) {
+            btnEl.addEventListener('click', function () {
+              const idx = Number(this.dataset.index);
+              bannerConfig.slides.splice(idx, 1);
+              if (!bannerConfig.slides.length) {
+                bannerConfig.slides.push({
+                  image: '',
+                  link: '',
+                  title: '12·12 年终大促\n数码好物低至 5 折',
+                  cta: '立即抢购',
+                  emoji: '🎮',
+                  bg: 'linear-gradient(135deg, #ff8a80 0%, #ff6a5a 45%, #ff4e3f 100%)',
+                });
+              }
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          });
+
+          propsComponentPanel.querySelectorAll('.banner-img-file').forEach(function (fileInput) {
+            fileInput.addEventListener('change', function () {
+              const idx = Number(this.dataset.index);
+              const file = this.files && this.files[0];
+              if (!file || !bannerConfig.slides[idx]) return;
+              const reader = new FileReader();
+              reader.onload = function () {
+                bannerConfig.slides[idx].image = reader.result;
+                const urlInput = propsComponentPanel.querySelector('.banner-img-url[data-index="' + idx + '"]');
+                if (urlInput) urlInput.value = reader.result;
+                renderCanvas();
+              };
+              reader.readAsDataURL(file);
+              this.value = '';
+            });
+          });
+
+          if (intervalInput) {
+            intervalInput.addEventListener('input', function () {
+              const next = Math.max(1000, Number(this.value) || 5000);
+              bannerConfig.intervalMs = next;
+              renderCanvas();
+            });
+          }
+          if (radiusInput) {
+            radiusInput.addEventListener('input', function () {
+              const next = Math.max(0, Math.min(24, Number(this.value) || 0));
+              bannerConfig.radius = next;
+              renderCanvas();
+            });
+          }
+        }
       }
 
       function renderCanvasSideActions() {
@@ -953,6 +1427,13 @@
           name: source.name + ' 副本',
           desc: source.desc,
         };
+        if (source.bannerConfig) {
+          try {
+            cloned.bannerConfig = JSON.parse(JSON.stringify(source.bannerConfig));
+          } catch (e) {
+            cloned.bannerConfig = source.bannerConfig;
+          }
+        }
         currentPage.floors.splice(index + 1, 0, cloned);
         selectedFloorId = cloned.id;
       }
@@ -990,7 +1471,139 @@
         });
       }
 
+      /**
+       * 生成分类页 Banner 单张滑块 HTML（含图片/渐变占位等）。
+       * @param {object} slide 单条配置
+       * @param {number} index 索引（用于 data-slide-index）
+       * @param {string} [extraClass] 附加 class，如无缝循环克隆层
+       * @returns {string}
+       */
+      function buildCategoryShowcaseSlideHtml(slide, index, extraClass) {
+        const extra = extraClass ? ' ' + extraClass : '';
+        const imgUrl = slide.image && String(slide.image).trim();
+        const linkUrl = slide.link && String(slide.link).trim();
+        const linkHtml = linkUrl
+          ? '<a class="cat-banner-slide-link" href="' + escapeHtmlAttr(linkUrl) + '" target="_blank" rel="noopener noreferrer" title="跳转链接"></a>'
+          : '';
+        if (imgUrl) {
+          return (
+            '<div class="cat-banner-slide cat-banner-slide--image' +
+            extra +
+            '" data-slide-index="' +
+            index +
+            '">' +
+            '<img class="cat-banner-slide-img" src="' +
+            escapeHtmlAttr(imgUrl) +
+            '" alt="" />' +
+            linkHtml +
+            '</div>'
+          );
+        }
+        const title = (slide.title || '').replace(/\n/g, '<br />');
+        const cta = slide.cta || '立即抢购';
+        const emoji = slide.emoji || '🎮';
+        const bg = slide.bg || 'linear-gradient(135deg, #ff8a80 0%, #ff6a5a 45%, #ff4e3f 100%)';
+        if (!title && !slide.bg) {
+          return (
+            '<div class="cat-banner-slide' +
+            extra +
+            '" data-slide-index="' +
+            index +
+            '" style="background:#eceff3;display:flex;align-items:center;justify-content:center;">' +
+            '<span style="font-size:11px;color:#8b95a1;">请设置图片或链接</span>' +
+            linkHtml +
+            '</div>'
+          );
+        }
+        return (
+          '<div class="cat-banner-slide' +
+          extra +
+          '" data-slide-index="' +
+          index +
+          '" style="background:' +
+          bg +
+          ';">' +
+          '<div><div class="cat-banner-title">' +
+          title +
+          '</div><span class="cat-banner-cta">' +
+          cta +
+          '</span></div>' +
+          '<div class="cat-banner-emoji">' +
+          emoji +
+          '</div>' +
+          linkHtml +
+          '</div>'
+        );
+      }
+
       function createFloorMarkup(floor) {
+        if (floor.type === 'category-showcase') {
+          const bannerConfig = ensureCategoryBannerConfig(floor);
+          const radius = Math.max(0, Math.min(24, Number(bannerConfig.radius) || 12));
+          const realCount = bannerConfig.slides.length;
+          const useSeamlessLoop = bannerConfig.loop !== false && realCount > 1;
+          let slidesMarkup = bannerConfig.slides
+            .map(function (slide, index) {
+              return buildCategoryShowcaseSlideHtml(slide, index, '');
+            })
+            .join('');
+          if (useSeamlessLoop) {
+            slidesMarkup += buildCategoryShowcaseSlideHtml(bannerConfig.slides[0], 0, 'cat-banner-slide--loop-clone');
+          }
+          const dotsMarkup = realCount > 1
+            ? '<div class="cat-banner-dots">' + bannerConfig.slides.map(function (_, index) {
+              return '<span data-dot-index="' + index + '"' + (index === 0 ? ' class="active"' : '') + '></span>';
+            }).join('') + '</div>'
+            : '';
+          return `
+            <div class="canvas-block canvas-block-category-showcase">
+              <div class="cat-page">
+                <aside class="cat-left">
+                  <div class="cat-nav-item active"><span>数码</span></div>
+                  <div class="cat-nav-item"><span>男装潮流汇</span></div>
+                  <div class="cat-nav-item"><span>生鲜蔬菜</span></div>
+                  <div class="cat-nav-item"><span>食品</span></div>
+                  <div class="cat-nav-item"><span>女装服饰</span></div>
+                  <div class="cat-nav-item"><span>进口</span></div>
+                  <div class="cat-nav-item"><span>鞋袜内衣</span></div>
+                  <div class="cat-nav-item"><span>家装百货</span></div>
+                  <div class="cat-nav-item"><span>手机</span></div>
+                  <div class="cat-nav-item"><span>旅行大箱包</span></div>
+                </aside>
+                <section class="cat-right">
+                  <div class="cat-banner" data-banner-floor-id="${floor.id}" data-banner-interval="${Number(bannerConfig.intervalMs) || 5000}" data-banner-loop="${bannerConfig.loop !== false ? '1' : '0'}" data-banner-seamless="${useSeamlessLoop ? '1' : '0'}" data-banner-real-count="${realCount}" style="border-radius:${radius}px;">
+                    <div class="cat-banner-track">
+                      ${slidesMarkup}
+                    </div>
+                    ${dotsMarkup}
+                  </div>
+                  <div class="cat-second-wrap">
+                    <div class="cat-second-title">数码配件</div>
+                    <div class="cat-second-grid">
+                      <div class="cat-second-item"><div class="cat-second-icon blue"></div><div class="cat-second-text">笔记本电脑</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon"></div><div class="cat-second-text">平板电脑</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon green"></div><div class="cat-second-text">整体一体机</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon orange"></div><div class="cat-second-text">智能手表</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon"></div><div class="cat-second-text">耳机耳麦</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon blue"></div><div class="cat-second-text">电竞设备</div></div>
+                    </div>
+                  </div>
+                  <div class="cat-third-wrap">
+                    <div class="cat-third-title">影音娱乐</div>
+                    <div class="cat-second-grid">
+                      <div class="cat-second-item"><div class="cat-second-icon green"></div><div class="cat-second-text">蓝牙音箱</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon"></div><div class="cat-second-text">头戴耳机</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon blue"></div><div class="cat-second-text">投影设备</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon orange"></div><div class="cat-second-text">K歌设备</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon blue"></div><div class="cat-second-text">家庭影院</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon"></div><div class="cat-second-text">游戏主机</div></div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          `;
+        }
         if (floor.type === 'banner') {
           return '<div class="canvas-block canvas-block-banner"></div>';
         }
@@ -1011,10 +1624,27 @@
 
       function renderCanvas() {
         const currentPage = getCurrentPage();
+        const isCategoryShowcasePage =
+          currentPage.id === 'page-category-1' &&
+          currentPage.floors.length === 1 &&
+          currentPage.floors[0].type === 'category-showcase';
+
+        dropZoneEl.classList.toggle('category-showcase-mode', isCategoryShowcasePage);
+        floorListEl.classList.toggle('category-showcase-mode', isCategoryShowcasePage);
+
         pageTitle.textContent = currentPage.name;
         propsCurrentPage.textContent = currentPage.name;
         placeholderEl.style.display = currentPage.floors.length ? 'none' : 'flex';
         floorListEl.innerHTML = currentPage.floors.map(function (floor, index) {
+          if (floor.type === 'category-showcase') {
+            return `
+              <div class="canvas-floor-card category-showcase-card ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
+                <div class="canvas-floor-body">
+                  ${createFloorMarkup(floor)}
+                </div>
+              </div>
+            `;
+          }
           return `
             <div class="canvas-floor-card ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
               <div class="canvas-floor-head">
@@ -1036,7 +1666,117 @@
             renderCanvasSideActions();
           });
         });
+        bindCategoryBannerAutoplay();
+        bindCategoryBannerLinks();
         bindFloorSortEvents(floorListEl, '.canvas-floor-card');
+      }
+
+      /**
+       * 编辑页内点击 Banner 链接触发时不跳转，避免离开画布。
+       */
+      function bindCategoryBannerLinks() {
+        floorListEl.querySelectorAll('.cat-banner-slide-link').forEach(function (anchorEl) {
+          anchorEl.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+          });
+        });
+      }
+
+      /**
+       * 绑定分类页 Banner 自动轮播：多张且开启循环时，末尾追加首张克隆并无缝复位，避免最后一张切回首张时反向闪跳。
+       */
+      function bindCategoryBannerAutoplay() {
+        Object.keys(bannerAutoplayTimers).forEach(function (key) {
+          window.clearInterval(bannerAutoplayTimers[key]);
+          delete bannerAutoplayTimers[key];
+        });
+        floorListEl.querySelectorAll('[data-banner-floor-id]').forEach(function (bannerEl) {
+          const trackEl = bannerEl.querySelector('.cat-banner-track');
+          if (!trackEl) return;
+          const slideNodes = trackEl.querySelectorAll('.cat-banner-slide');
+          const dots = bannerEl.querySelectorAll('[data-dot-index]');
+          const panelCount = slideNodes.length;
+          const floorId = bannerEl.dataset.bannerFloorId || '';
+          const seamless = bannerEl.dataset.bannerSeamless === '1';
+          const realCount = Math.max(1, Number(bannerEl.dataset.bannerRealCount) || panelCount);
+          const intervalMs = Math.max(1000, Number(bannerEl.dataset.bannerInterval) || 5000);
+          const loopEnabled = bannerEl.dataset.bannerLoop !== '0';
+
+          if (panelCount <= 1) {
+            trackEl.style.transform = 'translateX(0%)';
+            trackEl.classList.remove('cat-banner-track--instant');
+            dots.forEach(function (dot, dotIndex) {
+              dot.classList.toggle('active', dotIndex === 0);
+            });
+            return;
+          }
+
+          /**
+           * 根据当前视觉索引更新指示点。
+           * @param {number} visualIndex 当前轨道偏移对应的页索引（无缝模式下含克隆页）
+           */
+          function updateDots(visualIndex) {
+            var dotIdx = visualIndex;
+            if (seamless && visualIndex === realCount) {
+              dotIdx = 0;
+            } else if (!seamless && loopEnabled) {
+              dotIdx = visualIndex % realCount;
+            }
+            dots.forEach(function (dot, dotIndex) {
+              dot.classList.toggle('active', dotIndex === dotIdx);
+            });
+          }
+
+          if (!seamless) {
+            var simpleIndex = 0;
+            bannerAutoplayTimers[floorId] = window.setInterval(function () {
+              trackEl.classList.remove('cat-banner-track--instant');
+              if (loopEnabled) {
+                simpleIndex = (simpleIndex + 1) % panelCount;
+              } else {
+                simpleIndex = Math.min(simpleIndex + 1, panelCount - 1);
+              }
+              trackEl.style.transform = 'translateX(-' + simpleIndex * 100 + '%)';
+              updateDots(simpleIndex);
+            }, intervalMs);
+            return;
+          }
+
+          var index = 0;
+          var pendingReset = null;
+
+          bannerAutoplayTimers[floorId] = window.setInterval(function () {
+            if (pendingReset) {
+              trackEl.removeEventListener('transitionend', pendingReset);
+              pendingReset = null;
+            }
+            var next = index + 1;
+            trackEl.classList.remove('cat-banner-track--instant');
+            trackEl.style.transform = 'translateX(-' + next * 100 + '%)';
+            updateDots(next);
+
+            if (next === realCount) {
+              index = realCount;
+              pendingReset = function (event) {
+                if (event.target !== trackEl) return;
+                if (event.propertyName !== 'transform') return;
+                trackEl.removeEventListener('transitionend', pendingReset);
+                pendingReset = null;
+                trackEl.classList.add('cat-banner-track--instant');
+                index = 0;
+                trackEl.style.transform = 'translateX(0%)';
+                void trackEl.offsetHeight;
+                requestAnimationFrame(function () {
+                  trackEl.classList.remove('cat-banner-track--instant');
+                });
+              };
+              trackEl.addEventListener('transitionend', pendingReset);
+            } else {
+              index = next;
+            }
+          }, intervalMs);
+        });
       }
 
       function renderPagesPanel() {
