@@ -454,6 +454,248 @@
       color: #3b3f46;
       margin-bottom: 10px;
     }
+    /* 分类页2（数码稿）：侧栏项多，可滚动；仅 Banner + 单块白卡三列网格 */
+    .canvas-block-category-showcase.cat-preset-page2 .cat-left {
+      max-height: 640px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .canvas-block-category-showcase.cat-preset-page2 .cat-nav-item {
+      padding: 9px 6px 9px 10px;
+      font-size: 11px;
+      line-height: 1.25;
+    }
+    .page-preview-block.category-showcase-page2 .mini-sec-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .page-preview-block.category-showcase-page2 .mini-nav span.active {
+      background: #ffe8df;
+    }
+    .page-preview-block.category-showcase-page2 .mini-nav span.active::before {
+      background: #ff5b2e;
+    }
+    /* 分类页3：侧栏高亮底 + 横向子类 Tab + 商品横卡列表 */
+    .canvas-block-category-showcase.cat-preset-page3 .cat-left {
+      max-height: 640px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-nav-item {
+      padding: 9px 6px 9px 10px;
+      font-size: 11px;
+      line-height: 1.25;
+      justify-content: center;
+      text-align: center;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-nav-item span {
+      display: block;
+      width: 100%;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-nav-item.active {
+      color: #ff6600;
+      background: #fff5eb;
+      font-weight: 600;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-nav-item.active::before {
+      display: none;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-right {
+      background: #f7f7f7;
+      padding: 10px 0 12px;
+      gap: 0;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-tabs-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px 10px;
+      flex-shrink: 0;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-tabs-scroll {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-tabs-scroll::-webkit-scrollbar {
+      display: none;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-tab {
+      flex-shrink: 0;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      line-height: 1.2;
+      background: #ececec;
+      color: #5c5c5c;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-tab.active {
+      background: #fff0e6;
+      color: #ff6600;
+      font-weight: 600;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-tabs-more {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: #ff6600;
+      font-size: 11px;
+      cursor: default;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-list {
+      padding: 0 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-card {
+      display: flex;
+      gap: 10px;
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+      border: 1px solid #f0f0f0;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-card-img {
+      width: 88px;
+      height: 88px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      background-size: cover;
+      background-position: center;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-card-body {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      padding-top: 2px;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-card-title {
+      font-size: 13px;
+      line-height: 1.45;
+      color: #333;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      word-break: break-all;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-card-spec {
+      font-size: 11px;
+      color: #999;
+      margin-top: 6px;
+      line-height: 1.35;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-card-row {
+      margin-top: auto;
+      padding-top: 10px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-price {
+      color: #ff6600;
+      line-height: 1;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-price-yuan {
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-price-num {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-price-dec {
+      font-size: 11px;
+      font-weight: 600;
+      vertical-align: 0.35em;
+      margin-left: 1px;
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-add {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(145deg, #ff8f4a 0%, #ff6600 100%);
+      color: #fff;
+      font-size: 20px;
+      font-weight: 300;
+      line-height: 28px;
+      text-align: center;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(255, 102, 0, 0.35);
+    }
+    .canvas-block-category-showcase.cat-preset-page3 .cat-p3-footer {
+      text-align: center;
+      font-size: 12px;
+      color: #bbb;
+      padding: 16px 10px 8px;
+    }
+    .page-preview-block.category-showcase-page3 .mini-main {
+      gap: 4px;
+      background: #ebebeb;
+    }
+    .page-preview-block.category-showcase-page3 .mini-nav span.active {
+      background: #ffe8d6;
+    }
+    .page-preview-block.category-showcase-page3 .mini-nav span.active::before {
+      display: none;
+    }
+    .page-preview-block.category-showcase-page3 .mini-p3-tabs {
+      display: flex;
+      gap: 3px;
+      padding: 0 4px;
+    }
+    .page-preview-block.category-showcase-page3 .mini-p3-tabs span {
+      height: 10px;
+      border-radius: 999px;
+      background: #e8e8e8;
+      flex: 1;
+      min-width: 0;
+    }
+    .page-preview-block.category-showcase-page3 .mini-p3-tabs span:first-child {
+      flex: 1.2;
+      background: #ffe8d6;
+    }
+    .page-preview-block.category-showcase-page3 .mini-p3-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding: 0 4px;
+    }
+    .page-preview-block.category-showcase-page3 .mini-p3-rows .row {
+      height: 18px;
+      border-radius: 4px;
+      background: #fff;
+      border: 1px solid #eee;
+      display: flex;
+      gap: 3px;
+      padding: 2px;
+      box-sizing: border-box;
+    }
+    .page-preview-block.category-showcase-page3 .mini-p3-rows .row i {
+      width: 12px;
+      border-radius: 2px;
+      background: linear-gradient(135deg, #ffcdd2, #ef9a9a);
+      flex-shrink: 0;
+    }
+    .page-preview-block.category-showcase-page3 .mini-p3-rows .row b {
+      flex: 1;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #e8e8e8 40%, #f5f5f5 100%);
+    }
     
     .canvas-block-detail { display: grid; grid-template-columns: 120px 1fr; gap: 12px; }
     .canvas-block-detail .thumb { height: 126px; border-radius: 14px; background: linear-gradient(135deg, #fff7e6 0%, #ffd591 100%); }
@@ -752,8 +994,28 @@
           isDefault: true,
           pageType: 'main',
           floors: [
-            { id: 'floor-category-banner-2', type: 'banner', name: 'Banner 轮播', desc: '分类页顶部 Banner' },
-            { id: 'floor-category-entry-2', type: 'category-entry', name: '分类入口', desc: '二级频道快捷入口' },
+            {
+              id: 'floor-category-2-showcase',
+              type: 'category-showcase',
+              name: '分类页内容',
+              desc: '数码分类 · 侧栏 + Banner + 三列网格',
+              categoryPreset: 'page2',
+              bannerConfig: {
+                intervalMs: 5000,
+                radius: 12,
+                loop: true,
+                slides: [
+                  {
+                    image: 'assets/category-digital-banner.png',
+                    link: '',
+                    title: '',
+                    cta: '',
+                    emoji: '',
+                    bg: '',
+                  },
+                ],
+              },
+            },
           ],
         },
         {
@@ -763,7 +1025,13 @@
           isDefault: true,
           pageType: 'main',
           floors: [
-            { id: 'floor-category-grid-3', type: 'goods-grid', name: '商品网格', desc: '分类商品列表区' },
+            {
+              id: 'floor-category-3-showcase',
+              type: 'category-showcase',
+              name: '分类页内容',
+              desc: '侧栏 + 子类 Tab + 商品列表',
+              categoryPreset: 'page3',
+            },
           ],
         },
         {
@@ -998,6 +1266,46 @@
             </div>
           `;
         }
+        if (page.id === 'page-category-2') {
+          return `
+            <div class="page-preview-block category-showcase category-showcase-page2">
+              <div class="mini-wrap">
+                <div class="mini-nav">
+                  <span class="active"></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="mini-main">
+                  <div class="mini-banner" style="background:linear-gradient(135deg,#ff8a65 0%,#ff7043 100%);"></div>
+                  <div class="mini-sec-grid"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        if (page.id === 'page-category-3') {
+          return `
+            <div class="page-preview-block category-showcase category-showcase-page3">
+              <div class="mini-wrap">
+                <div class="mini-nav">
+                  <span class="active"></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="mini-main">
+                  <div class="mini-p3-tabs"><span></span><span></span><span></span><span></span></div>
+                  <div class="mini-p3-rows">
+                    <div class="row"><i></i><b></b></div>
+                    <div class="row"><i></i><b></b></div>
+                    <div class="row"><i></i><b></b></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
         if (!page.floors.length) {
           return '<div class="page-preview-empty">拖拽组件后生成页面预览</div>';
         }
@@ -1102,6 +1410,16 @@
           return '<div class="config-grid"><div class="config-item"><label>活动类型</label><select><option>秒杀</option><option>拼团</option><option>限时购</option></select></div><div class="config-item"><label>主题颜色</label><input type="color" value="#722ed1" /></div><div class="config-item"><label>是否显示倒计时</label><select><option>显示</option><option>隐藏</option></select></div><div class="config-item"><label>活动数量</label><input value="4" /></div></div>';
         }
         if (floor.type === 'category-showcase') {
+          if (floor.categoryPreset === 'page3') {
+            return (
+              '<div class="config-grid">' +
+              '<div class="config-item" style="grid-column:1 / -1;">' +
+              '<p style="font-size:13px;line-height:1.75;color:var(--text);margin:0 0 8px;">此楼层为<strong>分类页3</strong>静态布局：左侧一级类目（「数码」高亮）、右侧可横向滚动的子类胶囊 Tab（含右侧下拉示意）、竖向商品卡片（左图右文、规格灰字、橙色价格 ¥198.98、圆形加购「+」）及列表底部「没有更多了」。</p>' +
+              '<p style="font-size:12px;color:var(--text-muted);margin:0;">完整设计稿参考：<code style="font-size:11px;">assets/category-page3-ref.png</code></p>' +
+              '</div>' +
+              '</div>'
+            );
+          }
           const bannerConfig = ensureCategoryBannerConfig(floor);
           return (
             '<div class="config-grid">' +
@@ -1138,7 +1456,7 @@
         propsComponentPanel.className = '';
         propsComponentPanel.innerHTML = getComponentPropsMarkup(currentFloor);
 
-        if (currentFloor.type === 'category-showcase') {
+        if (currentFloor.type === 'category-showcase' && currentFloor.categoryPreset !== 'page3') {
           const bannerConfig = ensureCategoryBannerConfig(currentFloor);
           const intervalInput = document.getElementById('category-banner-interval');
           const radiusInput = document.getElementById('category-banner-radius');
@@ -1427,6 +1745,9 @@
           name: source.name + ' 副本',
           desc: source.desc,
         };
+        if (source.categoryPreset) {
+          cloned.categoryPreset = source.categoryPreset;
+        }
         if (source.bannerConfig) {
           try {
             cloned.bannerConfig = JSON.parse(JSON.stringify(source.bannerConfig));
@@ -1536,25 +1857,237 @@
         );
       }
 
+      /**
+       * 生成分类 showcase 楼层顶部轮播 Banner 的 HTML（含无缝循环克隆层与指示点）。
+       * @param {{ id: string }} floor 当前楼层
+       * @param {object} bannerConfig ensureCategoryBannerConfig 返回值
+       * @returns {string}
+       */
+      function buildCategoryShowcaseBannerSectionMarkup(floor, bannerConfig) {
+        const radius = Math.max(0, Math.min(24, Number(bannerConfig.radius) || 12));
+        const realCount = bannerConfig.slides.length;
+        const useSeamlessLoop = bannerConfig.loop !== false && realCount > 1;
+        let slidesMarkup = bannerConfig.slides
+          .map(function (slide, index) {
+            return buildCategoryShowcaseSlideHtml(slide, index, '');
+          })
+          .join('');
+        if (useSeamlessLoop) {
+          slidesMarkup += buildCategoryShowcaseSlideHtml(bannerConfig.slides[0], 0, 'cat-banner-slide--loop-clone');
+        }
+        const dotsMarkup = realCount > 1
+          ? '<div class="cat-banner-dots">' + bannerConfig.slides.map(function (_, index) {
+            return '<span data-dot-index="' + index + '"' + (index === 0 ? ' class="active"' : '') + '></span>';
+          }).join('') + '</div>'
+          : '';
+        return (
+          '<div class="cat-banner" data-banner-floor-id="' +
+          escapeHtmlAttr(floor.id) +
+          '" data-banner-interval="' +
+          (Number(bannerConfig.intervalMs) || 5000) +
+          '" data-banner-loop="' +
+          (bannerConfig.loop !== false ? '1' : '0') +
+          '" data-banner-seamless="' +
+          (useSeamlessLoop ? '1' : '0') +
+          '" data-banner-real-count="' +
+          realCount +
+          '" style="border-radius:' +
+          radius +
+          'px;">' +
+          '<div class="cat-banner-track">' +
+          slidesMarkup +
+          '</div>' +
+          dotsMarkup +
+          '</div>'
+        );
+      }
+
+      /**
+       * 生成分类页2（数码设计稿）画布：左侧长导航 + 右侧 Banner + 单块白卡三列子类网格。
+       * @param {{ id: string }} floor 楼层
+       * @param {string} bannerSectionHtml 由 buildCategoryShowcaseBannerSectionMarkup 生成的 HTML
+       * @returns {string}
+       */
+      function buildCategoryShowcasePage2CanvasMarkup(floor, bannerSectionHtml) {
+        const leftNavLabels = [
+          '数码',
+          '男装潮流服',
+          '生鲜蔬菜',
+          '食品',
+          '女装服饰',
+          '进口',
+          '鞋袜内衣',
+          '家装百货',
+          '手机',
+          '旅行大箱包',
+          '母婴营养',
+          '饰品',
+        ];
+        const leftNavHtml = leftNavLabels
+          .map(function (label, index) {
+            const activeClass = index === 0 ? ' active' : '';
+            return '<div class="cat-nav-item' + activeClass + '"><span>' + label + '</span></div>';
+          })
+          .join('');
+        const gridItems = [
+          ['笔记本电脑', 'blue'],
+          ['平板电脑', ''],
+          ['整体一体机', 'green'],
+          ['智能手表', 'orange'],
+          ['耳机耳麦', ''],
+          ['平板电脑', 'blue'],
+          ['音响', 'green'],
+          ['家庭影院', 'orange'],
+          ['影棚设备', 'blue'],
+          ['平衡车', ''],
+          ['手机', 'green'],
+          ['儿童手表', 'orange'],
+        ];
+        const gridHtml =
+          '<div class="cat-second-grid">' +
+          gridItems
+            .map(function (pair) {
+              const text = pair[0];
+              const tone = pair[1];
+              const iconClass = tone ? 'cat-second-icon ' + tone : 'cat-second-icon';
+              return (
+                '<div class="cat-second-item"><div class="' +
+                iconClass +
+                '"></div><div class="cat-second-text">' +
+                text +
+                '</div></div>'
+              );
+            })
+            .join('') +
+          '</div>';
+        return (
+          '<div class="canvas-block canvas-block-category-showcase cat-preset-page2">' +
+          '<div class="cat-page">' +
+          '<aside class="cat-left">' +
+          leftNavHtml +
+          '</aside>' +
+          '<section class="cat-right">' +
+          bannerSectionHtml +
+          '<div class="cat-second-wrap">' +
+          gridHtml +
+          '</div>' +
+          '</section>' +
+          '</div>' +
+          '</div>'
+        );
+      }
+
+      /**
+       * 生成分类页3画布：左侧类目 + 右侧横向子类 Tab + 商品列表卡片 + 底部「没有更多了」。
+       * @param {{ id: string }} floor 楼层
+       * @returns {string}
+       */
+      function buildCategoryShowcasePage3CanvasMarkup(floor) {
+        const fid = floor && floor.id ? escapeHtmlAttr(floor.id) : '';
+        const leftNavLabels = [
+          '数码',
+          '男装潮流服',
+          '生鲜蔬菜',
+          '食品',
+          '女装服饰',
+          '进口',
+          '鞋袜内衣',
+          '家装百货',
+          '手机',
+          '旅行大箱包',
+          '母婴营养',
+          '饰品',
+        ];
+        const leftNavHtml = leftNavLabels
+          .map(function (label, index) {
+            const activeClass = index === 0 ? ' active' : '';
+            return '<div class="cat-nav-item' + activeClass + '"><span>' + label + '</span></div>';
+          })
+          .join('');
+        const subTabs = ['希维尔', '依泽瑞尔', '提莫', '崔丝'];
+        const tabsHtml =
+          '<div class="cat-p3-tabs-wrap">' +
+          '<div class="cat-p3-tabs-scroll">' +
+          subTabs
+            .map(function (name, i) {
+              const ac = i === 0 ? ' active' : '';
+              return '<span class="cat-p3-tab' + ac + '">' + name + '</span>';
+            })
+            .join('') +
+          '</div>' +
+          '<button type="button" class="cat-p3-tabs-more" aria-label="展开" title="展开">▼</button>' +
+          '</div>';
+        const titleText =
+          '大型犬只野兽派洗剪吹凶悍大叔是洗澡澡，东分三凤逆天，大型犬只野兽派洗剪吹凶悍大叔是洗澡澡。';
+        const specText = '灰色 66CM 100g可手洗';
+        const thumbBgs = [
+          'linear-gradient(145deg, #c62828 0%, #e53935 45%, #ffab91 100%)',
+          'linear-gradient(145deg, #8d6e63 0%, #bcaaa4 40%, #efebe9 100%)',
+          'linear-gradient(145deg, #b0bec5 0%, #eceff1 50%, #fafafa 100%)',
+          'linear-gradient(145deg, #ec407a 0%, #f48fb1 50%, #fce4ec 100%)',
+        ];
+        const cardsHtml = thumbBgs
+          .map(function (bg) {
+            return (
+              '<div class="cat-p3-card">' +
+              '<div class="cat-p3-card-img" style="background-image:' +
+              bg +
+              ';"></div>' +
+              '<div class="cat-p3-card-body">' +
+              '<div class="cat-p3-card-title">' +
+              titleText +
+              '</div>' +
+              '<div class="cat-p3-card-spec">' +
+              specText +
+              '</div>' +
+              '<div class="cat-p3-card-row">' +
+              '<div class="cat-p3-price">' +
+              '<span class="cat-p3-price-yuan">¥</span>' +
+              '<span class="cat-p3-price-num">198</span>' +
+              '<span class="cat-p3-price-dec">.98</span>' +
+              '</div>' +
+              '<div class="cat-p3-add" aria-hidden="true">+</div>' +
+              '</div>' +
+              '</div>' +
+              '</div>'
+            );
+          })
+          .join('');
+        return (
+          '<div class="canvas-block canvas-block-category-showcase cat-preset-page3"' +
+          (fid ? ' data-floor-id="' + fid + '"' : '') +
+          '>' +
+          '<div class="cat-page">' +
+          '<aside class="cat-left">' +
+          leftNavHtml +
+          '</aside>' +
+          '<section class="cat-right">' +
+          tabsHtml +
+          '<div class="cat-p3-list">' +
+          cardsHtml +
+          '</div>' +
+          '<div class="cat-p3-footer">没有更多了</div>' +
+          '</section>' +
+          '</div>' +
+          '</div>'
+        );
+      }
+
+      /**
+       * 根据楼层配置生成画布中单层的预览 HTML。
+       * @param {{ type: string, id?: string, categoryPreset?: string, bannerConfig?: object }} floor 楼层
+       * @returns {string}
+       */
       function createFloorMarkup(floor) {
         if (floor.type === 'category-showcase') {
-          const bannerConfig = ensureCategoryBannerConfig(floor);
-          const radius = Math.max(0, Math.min(24, Number(bannerConfig.radius) || 12));
-          const realCount = bannerConfig.slides.length;
-          const useSeamlessLoop = bannerConfig.loop !== false && realCount > 1;
-          let slidesMarkup = bannerConfig.slides
-            .map(function (slide, index) {
-              return buildCategoryShowcaseSlideHtml(slide, index, '');
-            })
-            .join('');
-          if (useSeamlessLoop) {
-            slidesMarkup += buildCategoryShowcaseSlideHtml(bannerConfig.slides[0], 0, 'cat-banner-slide--loop-clone');
+          if (floor.categoryPreset === 'page3') {
+            return buildCategoryShowcasePage3CanvasMarkup(floor);
           }
-          const dotsMarkup = realCount > 1
-            ? '<div class="cat-banner-dots">' + bannerConfig.slides.map(function (_, index) {
-              return '<span data-dot-index="' + index + '"' + (index === 0 ? ' class="active"' : '') + '></span>';
-            }).join('') + '</div>'
-            : '';
+          const bannerConfig = ensureCategoryBannerConfig(floor);
+          const bannerSectionHtml = buildCategoryShowcaseBannerSectionMarkup(floor, bannerConfig);
+          if (floor.categoryPreset === 'page2') {
+            return buildCategoryShowcasePage2CanvasMarkup(floor, bannerSectionHtml);
+          }
           return `
             <div class="canvas-block canvas-block-category-showcase">
               <div class="cat-page">
@@ -1571,12 +2104,7 @@
                   <div class="cat-nav-item"><span>旅行大箱包</span></div>
                 </aside>
                 <section class="cat-right">
-                  <div class="cat-banner" data-banner-floor-id="${floor.id}" data-banner-interval="${Number(bannerConfig.intervalMs) || 5000}" data-banner-loop="${bannerConfig.loop !== false ? '1' : '0'}" data-banner-seamless="${useSeamlessLoop ? '1' : '0'}" data-banner-real-count="${realCount}" style="border-radius:${radius}px;">
-                    <div class="cat-banner-track">
-                      ${slidesMarkup}
-                    </div>
-                    ${dotsMarkup}
-                  </div>
+                  ${bannerSectionHtml}
                   <div class="cat-second-wrap">
                     <div class="cat-second-title">数码配件</div>
                     <div class="cat-second-grid">
@@ -1625,7 +2153,9 @@
       function renderCanvas() {
         const currentPage = getCurrentPage();
         const isCategoryShowcasePage =
-          currentPage.id === 'page-category-1' &&
+          (currentPage.id === 'page-category-1' ||
+            currentPage.id === 'page-category-2' ||
+            currentPage.id === 'page-category-3') &&
           currentPage.floors.length === 1 &&
           currentPage.floors[0].type === 'category-showcase';
 
