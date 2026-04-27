@@ -619,18 +619,17 @@ body {
   background: var(--primary-bg);
 }
 
-/* 我的页面选择模板 - 三列卡片 */
+/* 我的页面选择模板 - 带手机预览卡片 */
 .mine-template-grid {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  justify-content: center;
 }
 
 .radio-card.mine-template-card {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  padding: 16px 20px;
+  align-items: center;
+  padding: 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
@@ -638,14 +637,224 @@ body {
 }
 
 .radio-card.mine-template-card input {
-  margin: 0 8px 0 0;
-  vertical-align: middle;
+  display: none;
 }
 
 .radio-card.mine-template-card:hover,
 .radio-card.mine-template-card:has(input:checked) {
   border-color: var(--primary);
   background: var(--primary-bg);
+}
+
+.mine-template-preview {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.mine-preview-phone {
+  width: 160px;
+  background: #f5f5f5;
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 9px;
+  line-height: 1.3;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+.mine-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 10px 8px;
+}
+
+.mine-preview-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.35);
+  flex-shrink: 0;
+}
+
+.mine-preview-user {
+  flex: 1;
+  min-width: 0;
+}
+
+.mine-preview-name {
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.mine-preview-badge {
+  font-size: 7px;
+  color: #FFD700;
+  background: rgba(255,255,255,0.2);
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 6px;
+  margin-top: 2px;
+}
+
+.mine-preview-gear {
+  font-size: 12px;
+  color: rgba(255,255,255,0.8);
+}
+
+.mine-preview-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 6px 10px 8px;
+}
+
+.mine-preview-stat {
+  color: #fff;
+  font-size: 7px;
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.mine-preview-stat strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.mine-preview-section {
+  background: #fff;
+  padding: 8px 10px;
+}
+
+.mine-preview-sec-title {
+  font-size: 9px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 6px;
+}
+
+.mine-preview-order-row {
+  display: flex;
+  gap: 4px;
+}
+
+.mine-preview-order-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.mine-preview-order-item span {
+  font-size: 12px;
+}
+
+.mine-preview-order-item em {
+  font-style: normal;
+  font-size: 7px;
+  color: #666;
+}
+
+.mine-preview-grid-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.mine-preview-grid-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.mine-preview-grid-item span {
+  font-size: 12px;
+}
+
+.mine-preview-grid-item em {
+  font-style: normal;
+  font-size: 7px;
+  color: #666;
+}
+
+.mine-preview-menu {
+  background: #fff;
+  padding: 4px 10px 8px;
+}
+
+.mine-preview-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 0;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 8px;
+  color: #333;
+}
+
+.mine-preview-menu-item:last-child {
+  border-bottom: none;
+}
+
+.mine-preview-menu-item span {
+  font-size: 9px;
+}
+
+.mine-preview-menu-item em {
+  font-style: normal;
+  margin-left: auto;
+  color: #ccc;
+  font-size: 8px;
+}
+
+.mine-preview-points-card {
+  background: #fff7e6;
+  margin: 6px 8px;
+  padding: 8px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 8px;
+  color: #666;
+}
+
+.mine-preview-points-card strong {
+  display: block;
+  font-size: 14px;
+  color: #ff6b35;
+  margin-bottom: 2px;
+}
+
+.mine-preview-exchange-btn {
+  background: #ff6b35;
+  color: #fff;
+  border-radius: 10px;
+  padding: 3px 0;
+  font-size: 8px;
+  margin-top: 4px;
+}
+
+.mine-template-info {
+  text-align: center;
+  width: 100%;
+}
+
+.radio-card.mine-template-card .card-label {
+  font-weight: 600;
+  color: var(--text);
+  display: block;
+}
+
+.radio-card.mine-template-card .card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
 }
 
 .radio-card .card-label {

@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>商城运营后台 - 素材库管理系统</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+
+    /* 布局 */
+    .app { display: flex; flex-direction: column; height: 100vh; }
+    .header { display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 24px; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.06); z-index: 100; }
+    .header-logo { display: flex; flex-direction: column; }
+    .header-title { font-size: 18px; font-weight: 600; color: #1890ff; }
+    .header-subtitle { font-size: 12px; color: #8c8c8c; }
+    .header-actions { display: flex; align-items: center; gap: 16px; }
+    .header-icon { font-size: 18px; color: #666; cursor: pointer; }
+    .header-icon:hover { color: #1890ff; }
+    .user-info { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+    .user-info:hover { background: #f5f5f5; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; background: #1890ff; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .user-name { font-size: 14px; color: #333; }
+
+    .main { display: flex; flex: 1; overflow: hidden; }
+    .sider { width: 200px; background: #fff; box-shadow: 2px 0 8px rgba(0,0,0,0.06); display: flex; flex-direction: column; }
+    .menu-item { display: flex; align-items: center; gap: 10px; padding: 16px 20px; cursor: pointer; color: #333; transition: all 0.3s; }
+    .menu-item:hover { background: #f5f5f5; color: #1890ff; }
+    .menu-item.active { background: #e6f7ff; color: #1890ff; font-weight: 500; }
+    .menu-icon { font-size: 16px; }
+
+    .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* 素材库页面 */
+    .material-page { display: flex; flex-direction: column; height: 100%; }
+    .page-tabs { display: flex; background: #fff; border-bottom: 1px solid #f0f0f0; padding: 0 20px; }
+    .tab { padding: 16px 24px; cursor: pointer; font-size: 15px; font-weight: 500; color: #666; border-bottom: 2px solid transparent; transition: all 0.3s; }
+    .tab:hover { color: #1890ff; }
+    .tab.active { color: #1890ff; border-bottom-color: #1890ff; }
+
+    .page-content { display: flex; flex: 1; overflow: hidden; }
+
+    /* 左侧分类 */
+    .category-panel { width: 220px; background: #fff; border-right: 1px solid #f0f0f0; display: flex; flex-direction: column; }
+    .category-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 1px solid #f0f0f0; }
+    .category-title { font-size: 14px; font-weight: 600; color: #333; }
+    .add-btn { background: none; border: none; color: #1890ff; cursor: pointer; font-size: 20px; padding: 4px; }
+    .add-btn:hover { background: #f5f5f5; border-radius: 4px; }
+    .category-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .category-item { display: flex; align-items: center; padding: 8px 16px; cursor: pointer; transition: all 0.2s; }
+    .category-item:hover { background: #f5f5f5; }
+    .category-item.active { background: #e6f7ff; color: #1890ff; }
+    .category-item.level-2 { padding-left: 32px; }
+    .category-item.level-3 { padding-left: 48px; }
+    .category-icon { margin-right: 8px; color: #8c8c8c; }
+    .category-item.active .category-icon { color: #1890ff; }
+    .category-name { flex: 1; font-size: 13px; }
+    .category-tag { font-size: 10px; color: #1890ff; background: #e6f7ff; padding: 2px 6px; border-radius: 3px; }
+    .category-actions { display: none; gap: 4px; }
+    .category-item:hover .category-actions { display: flex; }
+    .cat-btn { background: none; border: none; padding: 4px; cursor: pointer; color: #666; font-size: 12px; }
+    .cat-btn:hover { color: #1890ff; }
+    .cat-btn.danger:hover { color: #ff4d4f; }
+
+    /* 右侧内容 */
+    .material-panel { flex: 1; display: flex; flex-direction: column; padding: 20px; overflow: hidden; }
+    .action-bar { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: #fff; border-radius: 8px; margin-bottom: 16px; }
+    .action-left { display: flex; gap: 12px; }
+    .action-right { display: flex; gap: 12px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; transition: all 0.3s; border: 1px solid #d9d9d9; background: #fff; color: #333; }
+    .btn:hover { border-color: #1890ff; color: #1890ff; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #1890ff; border-color: #1890ff; color: #fff; }
+    .btn-primary:hover { background: #40a9ff; border-color: #40a9ff; color: #fff; }
+    .btn-danger { color: #ff4d4f; border-color: #ff4d4f; }
+    .btn-danger:hover { background: #ff4d4f; color: #fff; }
+    .search-input { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; width: 200px; outline: none; }
+    .search-input:focus { border-color: #1890ff; }
+
+    .category-info { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; padding: 0 4px; }
+    .info-name { font-size: 16px; font-weight: 600; color: #333; }
+    .info-count { font-size: 13px; color: #8c8c8c; }
+
+    /* 素材网格 */
+    .material-container { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; border-radius: 8px; padding: 16px; }
+    .batch-bar { display: flex; align-items: center; gap: 16px; padding: 12px 16px; background: #fafafa; border-radius: 4px; margin-bottom: 16px; }
+    .checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; }
+    .checkbox input { width: 16px; height: 16px; cursor: pointer; }
+    .selected-count { font-size: 13px; color: #8c8c8c; }
+
+    .material-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; flex: 1; overflow-y: auto; padding: 4px; }
+    .material-card { position: relative; background: #fff; border: 1px solid #f0f0f0; border-radius: 8px; overflow: hidden; cursor: pointer; transition: all 0.3s; }
+    .material-card:hover { border-color: #1890ff; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .material-card.selected { border-color: #1890ff; background: #e6f7ff; }
+    .card-checkbox { position: absolute; top: 8px; left: 8px; z-index: 10; opacity: 0; transition: opacity 0.2s; }
+    .material-card:hover .card-checkbox, .material-card.selected .card-checkbox { opacity: 1; }
+    .card-thumbnail { width: 100%; height: 100px; background: #f5f5f5; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .card-thumbnail img { width: 100%; height: 100%; object-fit: cover; }
+    .video-overlay { position: absolute; top: 0; left: 0; right: 0; height: 100px; display: flex; align-items: center; justify-content: center; }
+    .play-icon { font-size: 28px; color: rgba(255,255,255,0.9); text-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+    .card-info { padding: 8px 10px; }
+    .card-name { font-size: 13px; font-weight: 500; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+    .card-meta { display: flex; gap: 12px; font-size: 11px; color: #8c8c8c; }
+    .card-type { font-weight: 500; color: #722ed1; text-transform: uppercase; }
+    .card-actions { position: absolute; bottom: 8px; right: 8px; display: flex; gap: 4px; opacity: 0; transition: opacity 0.2s; background: rgba(255,255,255,0.95); border-radius: 4px; padding: 4px; }
+    .material-card:hover .card-actions { opacity: 1; }
+    .action-btn { background: none; border: none; padding: 4px 8px; cursor: pointer; color: #666; font-size: 12px; border-radius: 4px; }
+    .action-btn:hover { background: #f5f5f5; color: #1890ff; }
+    .action-btn.danger:hover { color: #ff4d4f; }
+
+    /* 分页 */
+    .pagination { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 16px 0; }
+    .page-btn { min-width: 36px; height: 36px; border: 1px solid #d9d9d9; background: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+    .page-btn:hover { border-color: #1890ff; color: #1890ff; }
+    .page-btn.active { background: #1890ff; border-color: #1890ff; color: #fff; }
+    .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .page-size { padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; }
+    .page-total { font-size: 14px; color: #666; }
+
+    /* 弹窗 */
+    .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-width: 90%; max-height: 90%; overflow: hidden; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; border-bottom: 1px solid #f0f0f0; }
+    .modal-title { font-size: 16px; font-weight: 500; color: #333; }
+    .modal-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #999; padding: 4px; }
+    .modal-close:hover { color: #333; }
+    .modal-body { padding: 24px; max-height: 60vh; overflow-y: auto; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 24px; border-top: 1px solid #f0f0f0; }
+
+    .form-item { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .form-label { width: 80px; text-align: right; font-size: 14px; color: #333; }
+    .form-input { flex: 1; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; }
+    .form-input:focus { border-color: #1890ff; outline: none; }
+    .form-select { flex: 1; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; background: #fff; }
+
+    /* 上传区域 */
+    .upload-area { border: 2px dashed #d9d9d9; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.3s; }
+    .upload-area:hover { border-color: #1890ff; background: #fafafa; }
+    .upload-text { font-size: 14px; color: #666; }
+    .upload-hint { font-size: 12px; color: #999; margin-top: 8px; }
+    .file-list { margin-top: 16px; }
+    .file-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: #fafafa; border-radius: 4px; margin-bottom: 8px; }
+    .file-name { font-size: 13px; color: #333; }
+    .file-remove { background: none; border: none; color: #999; cursor: pointer; font-size: 18px; }
+    .file-remove:hover { color: #ff4d4f; }
+
+    /* 预览 */
+    .preview-content { text-align: center; }
+    .preview-content img, .preview-content video { max-width: 100%; max-height: 60vh; }
+    .preview-info { padding: 16px; text-align: left; }
+    .preview-name { font-size: 16px; font-weight: 500; color: #333; margin-bottom: 8px; }
+    .preview-meta { font-size: 13px; color: #8c8c8c; }
+
+    /* 空状态 */
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; color: #999; }
+    .empty-icon { font-size: 64px; margin-bottom: 16px; }
+    .empty-text { font-size: 14px; }
+
+    /* 素材选择弹窗 */
+    .material-select-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; max-height: 400px; overflow-y: auto; padding: 8px; }
+    .select-card { border: 2px solid #e5e7eb; border-radius: 8px; overflow: hidden; cursor: pointer; transition: all 0.2s; }
+    .select-card:hover { border-color: #1890ff; box-shadow: 0 2px 8px rgba(24,144,255,0.15); }
+    .select-card.selected { border-color: #1890ff; box-shadow: 0 0 0 2px rgba(24,144,255,0.2); background: #e6f7ff; }
+    .select-card-thumb { height: 100px; background: #f5f5f5; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .select-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .select-card-name { padding: 8px; font-size: 12px; color: #333; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* 树选择 */
+    .tree-select { width: 100%; }
+    .tree-option { padding: 8px 12px; cursor: pointer; transition: all 0.2s; }
+    .tree-option:hover { background: #f5f5f5; }
+    .tree-option.selected { background: #e6f7ff; color: #1890ff; }
+    .tree-option.level-2 { padding-left: 24px; }
+    .tree-option.level-3 { padding-left: 36px; }
+
+    /* 隐藏 */
+    .hidden { display: none !important; }
+
+    /* 通知 */
+    .toast { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); padding: 12px 24px; background: #333; color: #fff; border-radius: 6px; font-size: 14px; z-index: 2000; animation: fadeIn 0.3s; }
+    .toast.success { background: #52c41a; }
+    .toast.error { background: #ff4d4f; }
+    .toast.warning { background: #faad14; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateX(-50%) translateY(-10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+  </style>
+</head>
+<body>
+  <div id="app" class="app">
+    <!-- 头部 -->
+    <header class="header">
+      <div class="header-logo">
+        <div class="header-title">商城运营后台</div>
+        <div class="header-subtitle">运营管理系统</div>
+      </div>
+      <div class="header-actions">
+        <span class="header-icon" onclick="location.reload()" title="刷新">刷新</span>
+        <span class="header-icon" title="消息">消息</span>
+        <div class="user-info">
+          <div class="avatar">Admin</div>
+          <span class="user-name">管理员</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="main">
+      <!-- 侧边栏 -->
+      <aside class="sider">
+        <div class="menu-item active" data-page="material" onclick="switchPage('material')">
+          <span>素材库</span>
+        </div>
+        <div class="menu-item" data-page="decoration" onclick="switchPage('decoration')">
+          <span>页面装修</span>
+        </div>
+      </aside>
+
+      <!-- 内容区 -->
+      <main class="content">
+        <!-- 素材库页面 -->
+        <div id="material-page" class="material-page">
+          <div class="page-tabs">
+            <div class="tab active" data-type="image" onclick="switchTab('image')">图片库</div>
+            <div class="tab" data-type="video" onclick="switchTab('video')">视频库</div>
+          </div>
+
+          <div class="page-content">
+            <!-- 分类面板 -->
+            <div class="category-panel">
+              <div class="category-header">
+                <span class="category-title">素材分类</span>
+                <button class="add-btn" onclick="openAddCategoryModal()" title="新增分类">+</button>
+              </div>
+              <div id="category-list" class="category-list"></div>
+            </div>
+
+            <!-- 素材面板 -->
+            <div class="material-panel">
+              <div class="action-bar">
+                <div class="action-left">
+                  <button class="btn btn-primary" onclick="openUploadModal()">
+                    上传<span id="upload-type-text">图片</span>
+                  </button>
+                </div>
+                <div class="action-right">
+                  <input type="text" class="search-input" id="search-input" placeholder="搜索素材名称" oninput="handleSearch()">
+                  <button class="btn" id="move-btn" onclick="openMoveModal()" disabled>
+                    移动
+                  </button>
+                  <button class="btn btn-danger" id="delete-btn" onclick="batchDelete()" disabled>
+                    删除
+                  </button>
+                </div>
+              </div>
+
+              <div class="category-info">
+                <span class="info-name" id="current-category-name">默认分类</span>
+                <span class="info-count" id="material-count">共 0 个图片素材</span>
+              </div>
+
+              <div class="material-container">
+                <div class="batch-bar">
+                  <label class="checkbox">
+                    <input type="checkbox" id="select-all" onchange="handleSelectAll()">
+                    <span>全选</span>
+                  </label>
+                  <span class="selected-count">已选择 <span id="selected-count">0</span> 项</span>
+                </div>
+                <div id="material-grid" class="material-grid"></div>
+                <div id="empty-state" class="empty-state hidden">
+                  <div class="empty-text">暂无素材</div>
+                </div>
+              </div>
+
+              <div class="pagination" id="pagination"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 页面装修页面 -->
+        <div id="decoration-page" class="material-page hidden">
+          <div class="page-content" style="padding: 24px; justify-content: center; align-items: center;">
+            <div class="empty-state">
+              <div class="empty-text">页面装修功能开发中...</div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    // ==================== 数据 ====================
+    const DEFAULT_CATEGORY_ID = 'default';
+
+    let state = {
+      currentPage: 'material',
+      activeTab: 'image',
+      categories: [],
+      materials: [],
+      selectedCategoryId: DEFAULT_CATEGORY_ID,
+      selectedMaterialIds: [],
+      searchKeyword: '',
+      pagination: { current: 1, pageSize: 10 }
+    };
+
+    // 初始分类数据
+    const initialCategories = [
+      { id: DEFAULT_CATEGORY_ID, name: '默认分类', parentId: null, level: 1, isDefault: true },
+      { id: 'cat-1', name: '商品图片', parentId: null, level: 1 },
+      { id: 'cat-1-1', name: '服装类', parentId: 'cat-1', level: 2 },
+      { id: 'cat-1-1-1', name: '男装', parentId: 'cat-1-1', level: 3 },
+      { id: 'cat-1-1-2', name: '女装', parentId: 'cat-1-1', level: 3 },
+      { id: 'cat-1-2', name: '数码类', parentId: 'cat-1', level: 2 },
+      { id: 'cat-2', name: '营销素材', parentId: null, level: 1 },
+      { id: 'cat-2-1', name: '活动Banner', parentId: 'cat-2', level: 2 },
+      { id: 'cat-2-2', name: '促销海报', parentId: 'cat-2', level: 2 },
+      { id: 'cat-3', name: '视频素材', parentId: null, level: 1 },
+      { id: 'cat-4', name: '默认分类', parentId: null, level: 1, isDefault: true, isVideoDefault: true }
+    ];
+
+    // 示例图片
+    const sampleImages = Array.from({length: 30}, (_, i) => `https://picsum.photos/seed/img${i+1}/400/300`);
+    const sampleVideos = ['https://www.w3schools.com/html/mov_bbb.mp4', 'https://www.w3schools.com/html/movie.mp4'];
+
+    // 生成初始素材
+    function generateInitialMaterials() {
+      const materials = [];
+
+      // 图片素材
+      sampleImages.forEach((url, i) => {
+        let categoryId = DEFAULT_CATEGORY_ID;
+        if (i < 3) categoryId = DEFAULT_CATEGORY_ID;
+        else if (i < 5) categoryId = 'cat-1-1-1';
+        else if (i < 7) categoryId = 'cat-1-1-2';
+        else if (i < 9) categoryId = 'cat-1-2';
+        else if (i < 11) categoryId = 'cat-2-1';
+        else if (i < 13) categoryId = 'cat-2-2';
+        else if (i < 18) categoryId = DEFAULT_CATEGORY_ID;
+        else if (i < 22) categoryId = 'cat-1-1';
+        else if (i < 26) categoryId = 'cat-2-1';
+        else categoryId = 'cat-1-2';
+
+        materials.push({
+          id: `mat-img-${i+1}`,
+          name: `图片素材_${String(i+1).padStart(3, '0')}.jpg`,
+          type: 'image',
+          url,
+          size: Math.floor(Math.random() * 500000) + 100000,
+          dimensions: { width: 800, height: 600 },
+          categoryId,
+          createdAt: new Date().toISOString()
+        });
+      });
+
+      // 视频素材
+      for (let i = 0; i < 22; i++) {
+        materials.push({
+          id: `mat-vid-${i+1}`,
+          name: `视频素材_${String(i+1).padStart(3, '0')}.mp4`,
+          type: 'video',
+          url: sampleVideos[i % 2],
+          thumbnail: sampleImages[i % 30],
+          size: Math.floor(Math.random() * 20000000) + 5000000,
+          categoryId: 'cat-4',
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      return materials;
+    }
+
+    // ==================== 工具函数 ====================
+    function generateId() {
+      return 'id-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    }
+
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function getFileExtension(name) {
+      const idx = name.lastIndexOf('.');
+      return idx > 0 ? name.substring(idx + 1).toLowerCase() : '';
+    }
+
+    function getNameWithoutExtension(name) {
+      const idx = name.lastIndexOf('.');
+      return idx > 0 ? name.substring(0, idx) : name;
+    }
+
+    function showToast(message, type = 'info') {
+      const existing = document.querySelector('.toast');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ==================== 渲染函数 ====================
+    function render() {
+      renderCategories();
+      renderMaterials();
+      renderPagination();
+      updateUI();
+    }
+
+    function getFilteredCategories() {
+      return state.categories.filter(cat => {
+        if (cat.isDefault && !cat.isVideoDefault) return state.activeTab === 'image';
+        if (cat.isVideoDefault) return state.activeTab === 'video';
+        if (state.activeTab === 'image') return ['商品图片', '营销素材'].includes(cat.name);
+        return cat.name === '视频素材';
+      });
+    }
+
+    function renderCategories() {
+      const container = document.getElementById('category-list');
+      const filtered = getFilteredCategories();
+
+      let html = '';
+      filtered.forEach(cat => {
+        const children = state.categories.filter(c => c.parentId === cat.id);
+        const isActive = state.selectedCategoryId === cat.id;
+
+        html += `
+          <div class="category-item level-${cat.level} ${isActive ? 'active' : ''}" onclick="selectCategory('${cat.id}')">
+            <span class="category-icon">📁</span>
+            <span class="category-name">${cat.name}</span>
+            ${cat.isDefault ? '<span class="category-tag">默认</span>' : ''}
+            ${!cat.isDefault ? `
+              <div class="category-actions">
+                ${cat.level < 3 ? `<button class="cat-btn" onclick="event.stopPropagation(); openAddSubCategory('${cat.id}')" title="添加子分类">+</button>` : ''}
+                <button class="cat-btn" onclick="event.stopPropagation(); openEditCategory('${cat.id}')" title="编辑">编辑</button>
+                <button class="cat-btn danger" onclick="event.stopPropagation(); deleteCategory('${cat.id}')" title="删除">删除</button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+
+        // 渲染子分类
+        children.forEach(child => {
+          const childActive = state.selectedCategoryId === child.id;
+          const grandChildren = state.categories.filter(c => c.parentId === child.id);
+
+          html += `
+            <div class="category-item level-${child.level} ${childActive ? 'active' : ''}" onclick="selectCategory('${child.id}')">
+              <span class="category-icon">📁</span>
+              <span class="category-name">${child.name}</span>
+              <div class="category-actions">
+                ${child.level < 3 ? `<button class="cat-btn" onclick="event.stopPropagation(); openAddSubCategory('${child.id}')" title="添加子分类">+</button>` : ''}
+                <button class="cat-btn" onclick="event.stopPropagation(); openEditCategory('${child.id}')" title="编辑">编辑</button>
+                <button class="cat-btn danger" onclick="event.stopPropagation(); deleteCategory('${child.id}')" title="删除">删除</button>
+              </div>
+            </div>
+          `;
+
+          // 渲染三级分类
+          grandChildren.forEach(gc => {
+            const gcActive = state.selectedCategoryId === gc.id;
+            html += `
+              <div class="category-item level-3 ${gcActive ? 'active' : ''}" onclick="selectCategory('${gc.id}')">
+                <span class="category-icon">📁</span>
+                <span class="category-name">${gc.name}</span>
+                <div class="category-actions">
+                  <button class="cat-btn" onclick="event.stopPropagation(); openEditCategory('${gc.id}')" title="编辑">编辑</button>
+                  <button class="cat-btn danger" onclick="event.stopPropagation(); deleteCategory('${gc.id}')" title="删除">删除</button>
+                </div>
+              </div>
+            `;
+          });
+        });
+      });
+
+      container.innerHTML = html;
+    }
+
+    function renderMaterials() {
+      const container = document.getElementById('material-grid');
+      const emptyState = document.getElementById('empty-state');
+
+      const filtered = state.materials.filter(m => {
+        if (m.type !== state.activeTab) return false;
+        if (m.categoryId !== state.selectedCategoryId) return false;
+        if (state.searchKeyword && !m.name.toLowerCase().includes(state.searchKeyword.toLowerCase())) return false;
+        return true;
+      });
+
+      const start = (state.pagination.current - 1) * state.pagination.pageSize;
+      const paged = filtered.slice(start, start + state.pagination.pageSize);
+
+      if (paged.length === 0) {
+        container.innerHTML = '';
+        emptyState.classList.remove('hidden');
+      } else {
+        emptyState.classList.add('hidden');
+        container.innerHTML = paged.map(m => `
+          <div class="material-card ${state.selectedMaterialIds.includes(m.id) ? 'selected' : ''}" onclick="toggleMaterial('${m.id}')">
+            <div class="card-checkbox">
+              <input type="checkbox" ${state.selectedMaterialIds.includes(m.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleMaterial('${m.id}')">
+            </div>
+            <div class="card-thumbnail">
+              <img src="${m.type === 'video' ? m.thumbnail : m.url}" alt="${m.name}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22><rect fill=%22%23f0f0f0%22 width=%22100%22 height=%22100%22/><text x=%2250%22 y=%2250%22 text-anchor=%22middle%22 fill=%22%23999%22>图片</text></svg>'">
+              ${m.type === 'video' ? '<div class="video-overlay"><span class="play-icon">▶</span></div>' : ''}
+            </div>
+            <div class="card-info">
+              <div class="card-name" title="${m.name}">${getNameWithoutExtension(m.name)}</div>
+              <div class="card-meta">
+                <span class="card-type">${getFileExtension(m.name)}</span>
+                <span>${formatFileSize(m.size)}</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="action-btn" onclick="event.stopPropagation(); previewMaterial('${m.id}')" title="预览">预览</button>
+              <button class="action-btn" onclick="event.stopPropagation(); copyLink('${m.url}')" title="复制链接">复制</button>
+              <button class="action-btn danger" onclick="event.stopPropagation(); deleteMaterial('${m.id}')" title="删除">删除</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      // 更新计数
+      const categoryName = state.categories.find(c => c.id === state.selectedCategoryId)?.name || '';
+      document.getElementById('current-category-name').textContent = categoryName;
+      document.getElementById('material-count').textContent = `共 ${filtered.length} 个${state.activeTab === 'image' ? '图片' : '视频'}素材`;
+    }
+
+    function renderPagination() {
+      const container = document.getElementById('pagination');
+
+      const filtered = state.materials.filter(m => {
+        if (m.type !== state.activeTab) return false;
+        if (m.categoryId !== state.selectedCategoryId) return false;
+        if (state.searchKeyword && !m.name.toLowerCase().includes(state.searchKeyword.toLowerCase())) return false;
+        return true;
+      });
+
+      const total = filtered.length;
+      const totalPages = Math.ceil(total / state.pagination.pageSize);
+
+      if (totalPages <= 1) {
+        container.innerHTML = `<span class="page-total">共 ${total} 条</span>`;
+        return;
+      }
+
+      let html = `<span class="page-total">共 ${total} 条</span>`;
+
+      // 上一页
+      html += `<button class="page-btn" ${state.pagination.current === 1 ? 'disabled' : ''} onclick="goToPage(${state.pagination.current - 1})">‹</button>`;
+
+      // 页码
+      for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= state.pagination.current - 2 && i <= state.pagination.current + 2)) {
+          html += `<button class="page-btn ${i === state.pagination.current ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+        } else if (i === state.pagination.current - 3 || i === state.pagination.current + 3) {
+          html += `<span>...</span>`;
+        }
+      }
+
+      // 下一页
+      html += `<button class="page-btn" ${state.pagination.current === totalPages ? 'disabled' : ''} onclick="goToPage(${state.pagination.current + 1})">›</button>`;
+
+      // 每页条数
+      html += `
+        <select class="page-size" onchange="changePageSize(this.value)">
+          <option value="10" ${state.pagination.pageSize === 10 ? 'selected' : ''}>10条/页</option>
+          <option value="20" ${state.pagination.pageSize === 20 ? 'selected' : ''}>20条/页</option>
+          <option value="50" ${state.pagination.pageSize === 50 ? 'selected' : ''}>50条/页</option>
+        </select>
+      `;
+
+      container.innerHTML = html;
+    }
+
+    function updateUI() {
+      // 更新按钮状态
+      const moveBtn = document.getElementById('move-btn');
+      const deleteBtn = document.getElementById('delete-btn');
+      const selectAllCheckbox = document.getElementById('select-all');
+
+      const filtered = state.materials.filter(m => {
+        if (m.type !== state.activeTab) return false;
+        if (m.categoryId !== state.selectedCategoryId) return false;
+        if (state.searchKeyword && !m.name.toLowerCase().includes(state.searchKeyword.toLowerCase())) return false;
+        return true;
+      });
+
+      moveBtn.disabled = state.selectedMaterialIds.length === 0;
+      deleteBtn.disabled = state.selectedMaterialIds.length === 0;
+
+      const allSelected = filtered.length > 0 && state.selectedMaterialIds.length === filtered.length;
+      const someSelected = state.selectedMaterialIds.length > 0 && !allSelected;
+      selectAllCheckbox.checked = allSelected;
+      selectAllCheckbox.indeterminate = someSelected;
+
+      document.getElementById('selected-count').textContent = state.selectedMaterialIds.length;
+      document.getElementById('upload-type-text').textContent = state.activeTab === 'image' ? '图片' : '视频';
+    }
+
+    // ==================== 事件处理 ====================
+    function switchPage(page) {
+      state.currentPage = page;
+      document.querySelectorAll('.menu-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.page === page);
+      });
+      document.getElementById('material-page').classList.toggle('hidden', page !== 'material');
+      document.getElementById('decoration-page').classList.toggle('hidden', page !== 'decoration');
+    }
+
+    function switchTab(type) {
+      state.activeTab = type;
+      state.selectedCategoryId = type === 'video' ? 'cat-4' : DEFAULT_CATEGORY_ID;
+      state.selectedMaterialIds = [];
+      state.pagination.current = 1;
+      state.searchKeyword = '';
+      document.getElementById('search-input').value = '';
+
+      document.querySelectorAll('.tab').forEach(el => {
+        el.classList.toggle('active', el.dataset.type === type);
+      });
+
+      render();
+    }
+
+    function selectCategory(id) {
+      state.selectedCategoryId = id;
+      state.selectedMaterialIds = [];
+      state.pagination.current = 1;
+      render();
+    }
+
+    function handleSearch() {
+      state.searchKeyword = document.getElementById('search-input').value;
+      state.pagination.current = 1;
+      renderMaterials();
+      renderPagination();
+    }
+
+    function handleSelectAll() {
+      const checkbox = document.getElementById('select-all');
+      const filtered = state.materials.filter(m => {
+        if (m.type !== state.activeTab) return false;
+        if (m.categoryId !== state.selectedCategoryId) return false;
+        if (state.searchKeyword && !m.name.toLowerCase().includes(state.searchKeyword.toLowerCase())) return false;
+        return true;
+      });
+
+      if (checkbox.checked) {
+        state.selectedMaterialIds = filtered.map(m => m.id);
+      } else {
+        state.selectedMaterialIds = [];
+      }
+      renderMaterials();
+      updateUI();
+    }
+
+    function toggleMaterial(id) {
+      const idx = state.selectedMaterialIds.indexOf(id);
+      if (idx === -1) {
+        state.selectedMaterialIds.push(id);
+      } else {
+        state.selectedMaterialIds.splice(idx, 1);
+      }
+      renderMaterials();
+      updateUI();
+    }
+
+    function goToPage(page) {
+      state.pagination.current = page;
+      renderMaterials();
+      renderPagination();
+    }
+
+    function changePageSize(size) {
+      state.pagination.pageSize = parseInt(size);
+      state.pagination.current = 1;
+      renderMaterials();
+      renderPagination();
+    }
+
+    // ==================== 分类操作 ====================
+    function openAddCategoryModal() {
+      openModal('新增分类', `
+        <div class="form-item">
+          <label class="form-label">分类名称：</label>
+          <input type="text" class="form-input" id="category-name-input" placeholder="请输入分类名称" maxlength="20">
+        </div>
+      `, () => {
+        const name = document.getElementById('category-name-input').value.trim();
+        if (!name) {
+          showToast('请输入分类名称', 'warning');
+          return false;
+        }
+        state.categories.push({
+          id: generateId(),
+          name,
+          parentId: null,
+          level: 1
+        });
+        render();
+        showToast('新增成功', 'success');
+        return true;
+      });
+    }
+
+    function openAddSubCategory(parentId) {
+      const parent = state.categories.find(c => c.id === parentId);
+      if (!parent || parent.level >= 3) {
+        showToast('最多支持3级分类', 'warning');
+        return;
+      }
+
+      openModal('新增子分类', `
+        <div class="form-item">
+          <label class="form-label">上级分类：</label>
+          <input type="text" class="form-input" value="${parent.name}" disabled>
+        </div>
+        <div class="form-item">
+          <label class="form-label">分类名称：</label>
+          <input type="text" class="form-input" id="category-name-input" placeholder="请输入分类名称" maxlength="20">
+        </div>
+      `, () => {
+        const name = document.getElementById('category-name-input').value.trim();
+        if (!name) {
+          showToast('请输入分类名称', 'warning');
+          return false;
+        }
+        state.categories.push({
+          id: generateId(),
+          name,
+          parentId,
+          level: parent.level + 1
+        });
+        render();
+        showToast('新增成功', 'success');
+        return true;
+      });
+    }
+
+    function openEditCategory(id) {
+      const cat = state.categories.find(c => c.id === id);
+      if (!cat) return;
+
+      openModal('编辑分类', `
+        <div class="form-item">
+          <label class="form-label">分类名称：</label>
+          <input type="text" class="form-input" id="category-name-input" value="${cat.name}" placeholder="请输入分类名称" maxlength="20">
+        </div>
+      `, () => {
+        const name = document.getElementById('category-name-input').value.trim();
+        if (!name) {
+          showToast('请输入分类名称', 'warning');
+          return false;
+        }
+        cat.name = name;
+        render();
+        showToast('修改成功', 'success');
+        return true;
+      });
+    }
+
+    function deleteCategory(id) {
+      const cat = state.categories.find(c => c.id === id);
+      if (!cat) return;
+      if (cat.isDefault) {
+        showToast('默认分类不能删除', 'warning');
+        return;
+      }
+
+      openModal('删除确认', `
+        <p>确定删除分类"${cat.name}"吗？</p>
+        <p style="color: #8c8c8c; font-size: 13px; margin-top: 8px;">删除后，该分类下的素材将移至"默认分类"</p>
+      `, () => {
+        // 移动素材到默认分类
+        state.materials.forEach(m => {
+          if (m.categoryId === id) m.categoryId = DEFAULT_CATEGORY_ID;
+        });
+
+        // 删除分类及其子分类
+        const toDelete = [id];
+        const findChildren = (parentId) => {
+          state.categories.filter(c => c.parentId === parentId).forEach(c => {
+            toDelete.push(c.id);
+            findChildren(c.id);
+          });
+        };
+        findChildren(id);
+
+        state.categories = state.categories.filter(c => !toDelete.includes(c.id));
+
+        if (state.selectedCategoryId === id) {
+          state.selectedCategoryId = DEFAULT_CATEGORY_ID;
+        }
+
+        render();
+        showToast('删除成功', 'success');
+        return true;
+      }, true);
+    }
+
+    // ==================== 素材操作 ====================
+    function openUploadModal() {
+      const categoryOptions = state.categories
+        .filter(c => {
+          if (c.isDefault) return state.activeTab === 'image';
+          if (state.activeTab === 'image') return ['商品图片', '营销素材', '服装类', '数码类', '活动Banner', '促销海报'].includes(c.name);
+          return c.name === '视频素材';
+        })
+        .map(c => `<option value="${c.id}">${c.name}</option>`)
+        .join('');
+
+      const acceptTypes = state.activeTab === 'image'
+        ? 'image/jpeg,image/png,image/gif,image/webp'
+        : 'video/mp4,video/x-msvideo,video/quicktime';
+      const hint = state.activeTab === 'image'
+        ? '支持 JPG、PNG、GIF、WEBP 格式，单个文件不超过 3MB'
+        : '支持 MP4、WMV、MOV 格式，单个文件不超过 500MB';
+
+      openModal(`上传${state.activeTab === 'image' ? '图片' : '视频'}`, `
+        <div class="form-item">
+          <label class="form-label">选择分类：</label>
+          <select class="form-select" id="upload-category">${categoryOptions}</select>
+        </div>
+        <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+          <div class="upload-text">点击或拖拽文件到此区域上传</div>
+          <div class="upload-hint">${hint}</div>
+        </div>
+        <input type="file" id="file-input" accept="${acceptTypes}" multiple style="display:none" onchange="handleFileSelect(this.files)">
+        <div class="file-list" id="file-list"></div>
+      `, () => {
+        const files = document.querySelectorAll('.file-item');
+        if (files.length === 0) {
+          showToast('请选择要上传的文件', 'warning');
+          return false;
+        }
+
+        const categoryId = document.getElementById('upload-category').value;
+
+        document.querySelectorAll('.file-item').forEach((el, i) => {
+          const file = el.fileData;
+          const url = URL.createObjectURL(file);
+
+          state.materials.push({
+            id: generateId(),
+            name: file.name,
+            type: state.activeTab,
+            url,
+            thumbnail: state.activeTab === 'video' ? url : url,
+            size: file.size,
+            categoryId,
+            createdAt: new Date().toISOString()
+          });
+        });
+
+        render();
+        showToast('上传成功', 'success');
+        return true;
+      }, false, 500);
+
+      // 设置拖拽
+      setTimeout(() => {
+        const area = document.getElementById('upload-area');
+        if (area) {
+          area.ondragover = (e) => { e.preventDefault(); area.style.borderColor = '#1890ff'; };
+          area.ondragleave = () => { area.style.borderColor = '#d9d9d9'; };
+          area.ondrop = (e) => {
+            e.preventDefault();
+            area.style.borderColor = '#d9d9d9';
+            handleFileSelect(e.dataTransfer.files);
+          };
+        }
+      }, 100);
+    }
+
+    let uploadFiles = [];
+
+    function handleFileSelect(files) {
+      const maxSize = state.activeTab === 'image' ? 3 * 1024 * 1024 : 500 * 1024 * 1024;
+      const allowedTypes = state.activeTab === 'image'
+        ? ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+        : ['video/mp4', 'video/x-msvideo', 'video/quicktime'];
+
+      const fileList = document.getElementById('file-list');
+
+      Array.from(files).forEach(file => {
+        if (!allowedTypes.includes(file.type)) {
+          showToast(`不支持的文件格式: ${file.name}`, 'error');
+          return;
+        }
+        if (file.size > maxSize) {
+          showToast(`文件过大: ${file.name}`, 'error');
+          return;
+        }
+
+        uploadFiles.push(file);
+
+        const item = document.createElement('div');
+        item.className = 'file-item';
+        item.fileData = file;
+        item.innerHTML = `
+          <span class="file-name">${file.name} (${formatFileSize(file.size)})</span>
+          <button class="file-remove" onclick="this.parentElement.remove(); uploadFiles = uploadFiles.filter(f => f !== this.parentElement.fileData);">×</button>
+        `;
+        fileList.appendChild(item);
+      });
+    }
+
+    function previewMaterial(id) {
+      const material = state.materials.find(m => m.id === id);
+      if (!material) return;
+
+      const content = material.type === 'image'
+        ? `<img src="${material.url}" alt="${material.name}" style="max-width:100%;max-height:60vh;">`
+        : `<video src="${material.url}" controls autoplay style="max-width:100%;max-height:60vh;">您的浏览器不支持视频播放</video>`;
+
+      openModal('预览', `
+        <div class="preview-content">
+          ${content}
+          <div class="preview-info">
+            <div class="preview-name">${material.name}</div>
+            <div class="preview-meta">${material.type === 'image' ? '图片' : '视频'} · ${formatFileSize(material.size)}</div>
+          </div>
+        </div>
+      `, null, false, material.type === 'video' ? 800 : 600);
+    }
+
+    function copyLink(url) {
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('链接已复制到剪贴板', 'success');
+      }).catch(() => {
+        showToast('复制失败', 'error');
+      });
+    }
+
+    function deleteMaterial(id) {
+      openModal('删除确认', '<p>确定删除该素材吗？</p>', () => {
+        state.materials = state.materials.filter(m => m.id !== id);
+        state.selectedMaterialIds = state.selectedMaterialIds.filter(i => i !== id);
+        render();
+        showToast('删除成功', 'success');
+        return true;
+      }, true);
+    }
+
+    function batchDelete() {
+      if (state.selectedMaterialIds.length === 0) return;
+
+      openModal('删除确认', `<p>确定删除选中的 <strong>${state.selectedMaterialIds.length}</strong> 个素材吗？</p>`, () => {
+        state.materials = state.materials.filter(m => !state.selectedMaterialIds.includes(m.id));
+        state.selectedMaterialIds = [];
+        render();
+        showToast('删除成功', 'success');
+        return true;
+      }, true);
+    }
+
+    function openMoveModal() {
+      if (state.selectedMaterialIds.length === 0) return;
+
+      const categoryTree = buildCategoryTree();
+
+      openModal('移动素材', `
+        <p style="margin-bottom: 16px;">将选中的 <strong>${state.selectedMaterialIds.length}</strong> 个素材移动到：</p>
+        <div class="tree-select" id="move-tree">
+          ${categoryTree}
+        </div>
+      `, () => {
+        const selected = document.querySelector('#move-tree .tree-option.selected');
+        if (!selected) {
+          showToast('请选择目标分类', 'warning');
+          return false;
+        }
+
+        const targetId = selected.dataset.id;
+        state.materials.forEach(m => {
+          if (state.selectedMaterialIds.includes(m.id)) {
+            m.categoryId = targetId;
+          }
+        });
+
+        state.selectedMaterialIds = [];
+        render();
+        showToast('移动成功', 'success');
+        return true;
+      });
+
+      setTimeout(() => {
+        document.querySelectorAll('#move-tree .tree-option').forEach(el => {
+          el.onclick = () => {
+            document.querySelectorAll('#move-tree .tree-option').forEach(e => e.classList.remove('selected'));
+            el.classList.add('selected');
+          };
+        });
+      }, 100);
+    }
+
+    function buildCategoryTree() {
+      const roots = state.categories.filter(c => !c.parentId);
+      let html = '';
+
+      const build = (cats, level = 0) => {
+        cats.forEach(cat => {
+          html += `<div class="tree-option level-${level}" data-id="${cat.id}">${cat.name}</div>`;
+          const children = state.categories.filter(c => c.parentId === cat.id);
+          if (children.length) build(children, level + 1);
+        });
+      };
+
+      build(roots);
+      return html;
+    }
+
+    // ==================== 弹窗 ====================
+    function openModal(title, content, onOk, isDanger = false, width = 500) {
+      const existing = document.querySelector('.modal-overlay');
+      if (existing) existing.remove();
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+
+      overlay.innerHTML = `
+        <div class="modal" style="width: ${width}px;">
+          <div class="modal-header">
+            <span class="modal-title">${title}</span>
+            <button class="modal-close" onclick="closeModal()">×</button>
+          </div>
+          <div class="modal-body">${content}</div>
+          <div class="modal-footer">
+            <button class="btn" onclick="closeModal()">取消</button>
+            <button class="btn ${isDanger ? 'btn-danger' : 'btn-primary'}" id="modal-ok">确定</button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      if (onOk) {
+        document.getElementById('modal-ok').onclick = () => {
+          const result = onOk();
+          if (result !== false) closeModal();
+        };
+      }
+
+      // 聚焦第一个输入框
+      setTimeout(() => {
+        const input = overlay.querySelector('input');
+        if (input) input.focus();
+      }, 100);
+    }
+
+    function closeModal() {
+      const overlay = document.querySelector('.modal-overlay');
+      if (overlay) overlay.remove();
+      uploadFiles = [];
+    }
+
+    // ==================== 初始化 ====================
+    function init() {
+      state.categories = [...initialCategories];
+      state.materials = generateInitialMaterials();
+      render();
+    }
+
+    init();
+  </script>
+</body>
+</html>

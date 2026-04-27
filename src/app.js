@@ -554,7 +554,6 @@
   /** 我的页面模板 value -> 显示名称（用于编辑器标题） */
   const MINE_TEMPLATE_NAMES = {
     ecommerce: '电商商城模板',
-    points: '积分商城模板',
   };
 
   /**

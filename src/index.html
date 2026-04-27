@@ -303,6 +303,73 @@
     </div>
   </div>
 
+  <!-- 我的页面选择模板弹窗 -->
+  <div id="modal-mine-template" class="modal">
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h2>选择我的页面模板</h2>
+        <button type="button" class="modal-close" aria-label="关闭">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="tip">确认后将进入编辑器进行配置。</p>
+        <div class="mine-template-grid" id="mine-template-list">
+          <label class="radio-card mine-template-card">
+            <input type="radio" name="mine-template" value="ecommerce" checked />
+            <div class="mine-template-preview">
+              <div class="mine-preview-phone">
+                <div class="mine-preview-header" style="background:#FF3B30;">
+                  <div class="mine-preview-avatar"></div>
+                  <div class="mine-preview-user">
+                    <div class="mine-preview-name">阳光的猫咪</div>
+                    <div class="mine-preview-badge">⭐ 黄金会员</div>
+                  </div>
+                  <div class="mine-preview-gear">⚙️</div>
+                </div>
+                <div class="mine-preview-stats" style="background:#FF3B30;">
+                  <div class="mine-preview-stat"><strong>1,280</strong> <span>积分中心</span></div>
+                  <div class="mine-preview-stat"><strong>5</strong> <span>卡券</span></div>
+                </div>
+                <div class="mine-preview-section">
+                  <div class="mine-preview-sec-title">我的订单 <span style="float:right;font-size:8px;color:#999;">查看全部 ›</span></div>
+                  <div class="mine-preview-order-row">
+                    <div class="mine-preview-order-item"><span>💰</span><em>待付款</em></div>
+                    <div class="mine-preview-order-item"><span>📦</span><em>待发货</em></div>
+                    <div class="mine-preview-order-item"><span>🚚</span><em>待收货</em></div>
+                    <div class="mine-preview-order-item"><span>⭐</span><em>待评价</em></div>
+                    <div class="mine-preview-order-item"><span>🔄</span><em>退换/售后</em></div>
+                  </div>
+                </div>
+                <div class="mine-preview-section">
+                  <div class="mine-preview-grid-row">
+                    <div class="mine-preview-grid-item"><span>👛</span><em>我的钱包</em></div>
+                    <div class="mine-preview-grid-item"><span>❤️</span><em>我的收藏</em></div>
+                    <div class="mine-preview-grid-item"><span>💬</span><em>我的评价</em></div>
+                    <div class="mine-preview-grid-item"><span>🎁</span><em>我的收藏</em></div>
+                  </div>
+                </div>
+                <div class="mine-preview-menu">
+                  <div class="mine-preview-menu-item"><span>📍</span> 收货地址 <em>›</em></div>
+                  <div class="mine-preview-menu-item"><span>🕐</span> 浏览记录 <em>›</em></div>
+                  <div class="mine-preview-menu-item"><span>💳</span> 卡券绑定 <em>›</em></div>
+                  <div class="mine-preview-menu-item"><span>❓</span> 帮助中心 <em>›</em></div>
+                  <div class="mine-preview-menu-item"><span>✉️</span> 意见反馈 <em>›</em></div>
+                </div>
+              </div>
+            </div>
+            <div class="mine-template-info">
+              <span class="card-label">电商商城模板</span>
+              <span class="card-desc">标准电商会员中心，用户信息、订单入口、常用服务</span>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost modal-cancel">取消</button>
+        <button type="button" class="btn btn-primary" id="btn-confirm-mine-template">确定</button>
+      </div>
+    </div>
+  </div>
+
   <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
