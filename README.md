@@ -1,4 +1,4 @@
-# 商城搭建系统 - 原型演示
+# 商城搭建系统 - Mall Builder
 
 基于「平台侧制作模板 → 品牌方落地使用」的产品思路，实现的**可交互原型**，用于演示运营工作台的核心流程与界面结构。
 
@@ -63,7 +63,7 @@ npx http-server -p 8080
 ## 目录结构
 
 ```
-mall-builder-prototype/
+mall-builder/
 ├── src/                  # HTML 原型源码文件夹
 │   ├── index.html        # 主入口页面（运营工作台）
 │   ├── editor.html       # 编辑器页面（大型单文件应用）
