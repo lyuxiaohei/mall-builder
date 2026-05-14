@@ -389,6 +389,7 @@
     .canvas-floor-list.category-showcase-mode { gap: 0; }
     .canvas-floor-card { position: relative; z-index: 1; width: 100%; border: 1px solid #edf2f7; border-radius: 16px; background: #fff; overflow: hidden; box-shadow: 0 3px 12px rgba(15, 23, 42, 0.04); }
     .canvas-floor-fixed-badge { position: absolute; top: 6px; right: 6px; background: #f0f0f0; color: #999; font-size: 10px; padding: 1px 6px; border-radius: 4px; z-index: 10; pointer-events: none; }
+    .canvas-floor-card.floor-fixed { opacity: 0.55; pointer-events: auto; }
     .canvas-floor-card.float-button-card { position: absolute; right: 0; bottom: 0; width: auto; border: none; background: transparent; box-shadow: none; overflow: visible; pointer-events: auto; z-index: 100; }
     .canvas-floor-card.float-button-card.active { border: 2px solid #91d5ff; box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.18); border-radius: 8px; }
     .canvas-floor-card.active { border-color: #91d5ff; box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.12); }
@@ -466,23 +467,24 @@
     .canvas-block-rich-text .rich-text-content a { color: #1677ff; text-decoration: underline; }
     /* ========== 我的页面组件样式 ========== */
     .canvas-block-mine-header {
-      padding: 24px 16px 16px;
+      padding: 20px 16px 10px;
       border-radius: 0;
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 12px;
       position: relative;
+      z-index: 1;
     }
     .canvas-mine-avatar {
-      width: 60px;
-      height: 60px;
+      width: 56px;
+      height: 56px;
       border-radius: 50%;
       background: rgba(255,255,255,0.3);
       border: 2px solid rgba(255,255,255,0.5);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 26px;
+      font-size: 24px;
       color: #fff;
       flex-shrink: 0;
     }
@@ -499,18 +501,19 @@
     }
     .canvas-mine-level {
       font-size: 11px;
-      color: #FFD700;
+      color: #fff;
       background: rgba(255,255,255,0.2);
-      padding: 2px 10px;
-      border-radius: 12px;
+      padding: 2px 8px;
+      border-radius: 10px;
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
       width: fit-content;
     }
     .canvas-mine-level::before {
-      content: '⭐';
+      content: '★';
       font-size: 10px;
+      color: #FFD700;
     }
     .canvas-mine-settings {
       width: 28px;
@@ -525,29 +528,32 @@
     .canvas-block-mine-stats-bar {
       display: flex;
       align-items: center;
-      justify-content: center;
-      gap: 24px;
-      padding: 12px 16px;
-      border-radius: 0;
+      justify-content: space-around;
+      padding: 12px 16px 24px;
+      border-radius: 0 0 18px 18px;
+      position: relative;
+      z-index: 1;
     }
     .canvas-mine-stat-item {
       display: flex;
-      align-items: baseline;
-      gap: 4px;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
     }
     .canvas-mine-stat-value {
-      font-size: 20px;
+      font-size: 17px;
       font-weight: 700;
       color: #fff;
     }
     .canvas-mine-stat-label {
-      font-size: 12px;
-      color: rgba(255,255,255,0.85);
+      font-size: 11px;
+      color: rgba(255,255,255,0.8);
     }
     .canvas-block-mine-nav-grid {
-      padding: 14px 16px;
-      border-radius: 0;
+      padding: 12px;
+      border-radius: 12px;
       background: #fff;
+      margin: 8px 12px;
     }
     .canvas-mine-nav-title {
       font-size: 15px;
@@ -572,49 +578,58 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
+      position: relative;
+      flex: 1;
+      cursor: pointer;
+    }
       position: relative;
     }
     .canvas-mine-nav-icon {
       width: 40px;
       height: 40px;
-      border-radius: 50%;
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 18px;
+      color: #fff;
     }
-    .canvas-mine-nav-icon.icon-orange { background: #FFF3E0; }
-    .canvas-mine-nav-icon.icon-blue { background: #E3F2FD; }
-    .canvas-mine-nav-icon.icon-green { background: #E8F5E9; }
-    .canvas-mine-nav-icon.icon-red { background: #FFEBEE; }
-    .canvas-mine-nav-icon.icon-purple { background: #F3E5F5; }
-    .canvas-mine-nav-icon.icon-pink { background: #FCE4EC; }
-    .canvas-mine-nav-icon.icon-teal { background: #E0F2F1; }
-    .canvas-mine-nav-icon.icon-yellow { background: #FFFDE7; }
+    .canvas-mine-nav-icon.icon-orange { background: linear-gradient(135deg, #ff9800, #ff5722); }
+    .canvas-mine-nav-icon.icon-blue { background: linear-gradient(135deg, #42a5f5, #1976d2); }
+    .canvas-mine-nav-icon.icon-green { background: linear-gradient(135deg, #4caf50, #2e7d32); }
+    .canvas-mine-nav-icon.icon-red { background: linear-gradient(135deg, #ef5350, #c62828); }
+    .canvas-mine-nav-icon.icon-purple { background: linear-gradient(135deg, #7c4dff, #651fff); }
+    .canvas-mine-nav-icon.icon-pink { background: linear-gradient(135deg, #e91e63, #c2185b); }
+    .canvas-mine-nav-icon.icon-teal { background: linear-gradient(135deg, #26a69a, #00796b); }
+    .canvas-mine-nav-icon.icon-yellow { background: linear-gradient(135deg, #ffc107, #ff8f00); }
     .canvas-mine-nav-name {
       font-size: 11px;
       color: #666;
       text-align: center;
     }
+    .order-tabs { display: flex; padding: 0 8px 12px; }
+    .order-tabs .canvas-mine-nav-name { font-size: 11px; color: #666; }
     .canvas-mine-nav-badge {
       position: absolute;
-      top: -2px;
-      right: calc(50% - 24px);
-      min-width: 16px;
-      height: 16px;
-      line-height: 16px;
+      top: -4px;
+      right: calc(50% - 20px);
+      min-width: 14px;
+      height: 14px;
+      line-height: 14px;
       text-align: center;
-      font-size: 10px;
+      font-size: 9px;
       color: #fff;
-      background: #FF3B30;
-      border-radius: 8px;
-      padding: 0 4px;
+      background: #ee0a24;
+      border-radius: 7px;
+      padding: 0 3px;
     }
     .canvas-block-mine-menu-list {
-      padding: 0 16px;
-      border-radius: 0;
+      padding: 0 12px;
+      border-radius: 12px;
       background: #fff;
+      margin: 0 12px 8px;
+      overflow: hidden;
     }
     .canvas-mine-menu-title {
       font-size: 15px;
@@ -627,20 +642,22 @@
       align-items: center;
       gap: 12px;
       padding: 14px 0;
-      border-bottom: 1px solid #f5f5f5;
+      border-bottom: 1px solid #EEEEEE;
     }
     .canvas-mine-menu-item:last-child {
       border-bottom: none;
     }
     .canvas-mine-menu-icon {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: #FFF3E0;
+      width: 20px;
+      height: 20px;
+      border-radius: 0;
+      background: transparent;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-right: 10px;
     }
     .canvas-mine-menu-name {
       flex: 1;
@@ -648,7 +665,7 @@
       color: #333;
     }
     .canvas-mine-menu-arrow {
-      font-size: 14px;
+      font-size: 13px;
       color: #ccc;
     }
     .canvas-block-points-card {
@@ -3076,7 +3093,8 @@
           typeSelectId: options.typeSelectId || 'jump-type',
           targetInputId: options.targetInputId || 'jump-target',
           index: options.index || 0,
-          label: options.label || '跳转配置'
+          label: options.label || '跳转配置',
+          excludeTypes: options.excludeTypes || []
         };
 
         // 获取页面列表用于内部页面选择
@@ -3125,10 +3143,10 @@
               '<select class="' + config.typeSelectId + '" data-index="' + config.index + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;">' +
                 '<option value="none" ' + (config.jumpType === 'none' ? 'selected' : '') + '>不跳转</option>' +
                 '<option value="internal-page" ' + (config.jumpType === 'internal-page' ? 'selected' : '') + '>内部页面</option>' +
-                '<option value="category" ' + (config.jumpType === 'category' ? 'selected' : '') + '>分类</option>' +
-                '<option value="brand" ' + (config.jumpType === 'brand' ? 'selected' : '') + '>品牌</option>' +
-                '<option value="tag" ' + (config.jumpType === 'tag' ? 'selected' : '') + '>标签</option>' +
-                '<option value="product" ' + (config.jumpType === 'product' ? 'selected' : '') + '>单商品详情页</option>' +
+                (config.excludeTypes.indexOf('category') === -1 ? '<option value="category" ' + (config.jumpType === 'category' ? 'selected' : '') + '>分类</option>' : '') +
+                (config.excludeTypes.indexOf('brand') === -1 ? '<option value="brand" ' + (config.jumpType === 'brand' ? 'selected' : '') + '>品牌</option>' : '') +
+                (config.excludeTypes.indexOf('tag') === -1 ? '<option value="tag" ' + (config.jumpType === 'tag' ? 'selected' : '') + '>标签</option>' : '') +
+                (config.excludeTypes.indexOf('product') === -1 ? '<option value="product" ' + (config.jumpType === 'product' ? 'selected' : '') + '>单商品详情页</option>' : '') +
                 '<option value="external" ' + (config.jumpType === 'external' ? 'selected' : '') + '>外部链接</option>' +
               '</select>' +
             '</div>' +
@@ -4298,10 +4316,10 @@
             showViewAll: false,
             columns: 4,
             navItems: [
-              { icon: '📍', name: '导航项1', link: '', iconColor: 'blue' },
-              { icon: '❤️', name: '导航项2', link: '', iconColor: 'pink' },
-              { icon: '💬', name: '导航项3', link: '', iconColor: 'purple' },
-              { icon: '⭐', name: '导航项4', link: '', iconColor: 'orange' },
+              { icon: '📍', image: '', name: '导航项1', link: '', iconColor: 'blue' },
+              { icon: '❤️', image: '', name: '导航项2', link: '', iconColor: 'pink' },
+              { icon: '💬', image: '', name: '导航项3', link: '', iconColor: 'purple' },
+              { icon: '⭐', image: '', name: '导航项4', link: '', iconColor: 'orange' },
             ],
             backgroundColor: '#ffffff',
           }
@@ -4315,9 +4333,9 @@
             title: '',
             showTitle: false,
             menuItems: [
-              { icon: '📍', name: '菜单项1', link: '' },
-              { icon: '⚙️', name: '菜单项2', link: '' },
-              { icon: '💬', name: '菜单项3', link: '' },
+              { icon: '📍', image: '', name: '菜单项1', link: '' },
+              { icon: '⚙️', image: '', name: '菜单项2', link: '' },
+              { icon: '💬', image: '', name: '菜单项3', link: '' },
             ],
             backgroundColor: '#ffffff',
           }
@@ -4548,32 +4566,16 @@
             { id: 'category-level1-list', name: '一级分类（直接列表）', desc: '左侧一级分类 + 右侧直接商品列表', categoryPreset: 'page5', previewImage: '../assets/category-page5-ref.png' },
           ]
         },
-        product: {
-          name: '商品页',
-          icon: '🛍️',
-          templates: [
-            { id: 'product-standard', name: '标准商品页', desc: '商品展示、详情、评价模块', previewIcon: '🛒', floors: [
-              { id: 'floor-product-show', type: 'goods-list', name: '商品展示', desc: '商品列表展示' },
-            ]}
-          ]
-        },
-        cart: {
-          name: '购物车',
-          icon: '🛒',
-          templates: [
-            { id: 'cart-standard', name: '标准购物车', desc: '购物车列表、结算模块', previewIcon: '🛍️', floors: [] }
-          ]
-        },
         mine: {
           name: '我的',
           icon: '👤',
           templates: [
             { id: 'mine-ecommerce', name: '电商商城模板', desc: '标准电商会员中心，包含用户信息、订单入口、常用功能', minePreset: 'ecommerce', previewIcon: '🛒', floors: [
-              { id: 'floor-mine-header', type: 'mine-header', name: '用户信息区', desc: '头像、昵称、会员等级、设置入口', fixed: true, mineHeaderConfig: { avatarUrl: '', nickname: '阳光的猫咪', memberLevel: '黄金会员', showLevelBadge: true, showSettingsIcon: true, backgroundColor: '#FF3B30' } },
-              { id: 'floor-mine-stats', type: 'mine-stats-bar', name: '资产栏', desc: '积分、卡券等资产统计', fixed: true, mineStatsBarConfig: { backgroundColor: '#FF3B30', statsItems: [{ value: '1,280', label: '积分中心', link: '/points' }, { value: '5', label: '卡券', link: '/coupons' }] } },
-              { id: 'floor-mine-orders', type: 'mine-nav-grid', name: '我的订单', desc: '订单状态入口', fixed: true, mineNavGridConfig: { title: '我的订单', showTitle: true, showViewAll: true, columns: 5, navItems: [{ icon: '💰', name: '待付款', link: '/orders/unpaid', iconColor: 'orange', badge: '1' }, { icon: '📦', name: '待发货', link: '/orders/unshipped', iconColor: 'blue' }, { icon: '🚚', name: '待收货', link: '/orders/shipped', iconColor: 'green', badge: '2' }, { icon: '⭐', name: '待评价', link: '/orders/unreviewed', iconColor: 'yellow' }, { icon: '🔄', name: '退换/售后', link: '/orders/refund', iconColor: 'red' }], backgroundColor: '#ffffff' } },
-              { id: 'floor-mine-services', type: 'mine-nav-grid', name: '常用服务', desc: '常用功能入口', mineNavGridConfig: { title: '', showTitle: false, columns: 4, navItems: [{ icon: '👛', name: '我的钱包', link: '/wallet', iconColor: 'orange' }, { icon: '❤️', name: '我的收藏', link: '/favorites', iconColor: 'pink' }, { icon: '💬', name: '我的评价', link: '/reviews', iconColor: 'purple' }, { icon: '🎁', name: '我的收藏', link: '/favorites2', iconColor: 'red' }, { icon: '⭐', name: '积分中心', link: '/points', iconColor: 'teal' }], backgroundColor: '#ffffff' } },
-              { id: 'floor-mine-menu', type: 'mine-menu-list', name: '更多服务', desc: '其他功能入口', mineMenuListConfig: { title: '', showTitle: false, menuItems: [{ icon: '📍', name: '收货地址', link: '/address' }, { icon: '🕐', name: '浏览记录', link: '/history' }, { icon: '💳', name: '卡券绑定', link: '/card-bind' }, { icon: '❓', name: '帮助中心', link: '/help' }, { icon: '✉️', name: '意见反馈', link: '/feedback' }], backgroundColor: '#ffffff' } },
+              { id: 'floor-mine-header', type: 'mine-header', name: '用户信息区', desc: '头像、昵称、会员等级、设置入口', fixed: true, mineHeaderConfig: { avatarUrl: '', nickname: '悦享用户', memberLevel: '黄金会员', showLevelBadge: true, showSettingsIcon: true, backgroundColor: '#ff6034' } },
+              { id: 'floor-mine-stats', type: 'mine-stats-bar', name: '资产栏', desc: '积分、卡券等资产统计', fixed: true, mineStatsBarConfig: { backgroundColor: '#ff6034', statsItems: [{ value: '1,280', label: '积分中心', link: '/points' }, { value: '5', label: '卡券', link: '/coupons' }] } },
+              { id: 'floor-mine-orders', type: 'mine-nav-grid', name: '我的订单', desc: '订单状态入口', fixed: true, mineNavGridConfig: { title: '我的订单', showTitle: true, showViewAll: true, columns: 5, navItems: [{ icon: '💰', image: '', name: '待付款', link: '/orders/unpaid', iconColor: 'orange', badge: '1' }, { icon: '📦', image: '', name: '待发货', link: '/orders/unshipped', iconColor: 'blue' }, { icon: '🚚', image: '', name: '待收货', link: '/orders/shipped', iconColor: 'green', badge: '2' }, { icon: '⭐', image: '', name: '待评价', link: '/orders/unreviewed', iconColor: 'yellow' }, { icon: '🔄', image: '', name: '退换/售后', link: '/orders/refund', iconColor: 'red' }], backgroundColor: '#ffffff' } },
+              { id: 'floor-mine-services', type: 'mine-nav-grid', name: '常用服务', desc: '常用功能入口', mineNavGridConfig: { title: '', showTitle: false, columns: 4, navItems: [{ icon: '👛', image: '', name: '我的钱包', link: '/wallet', iconColor: 'orange' }, { icon: '❤️', image: '', name: '我的收藏', link: '/favorites', iconColor: 'pink' }, { icon: '💬', image: '', name: '我的评价', link: '/reviews', iconColor: 'purple' }, { icon: '🎁', image: '', name: '我的优惠券', link: '/coupons', iconColor: 'pink' }, { icon: '⭐', image: '', name: '积分中心', link: '/points', iconColor: 'green' }], backgroundColor: '#ffffff' } },
+              { id: 'floor-mine-menu', type: 'mine-menu-list', name: '更多服务', desc: '其他功能入口', mineMenuListConfig: { title: '', showTitle: false, menuItems: [{ icon: '📍', image: '', name: '收货地址', link: '/address' }, { icon: '🕐', image: '', name: '浏览记录', link: '/history' }, { icon: '💳', image: '', name: '卡券绑定', link: '/card-bind' }, { icon: '❓', image: '', name: '帮助中心', link: '/help' }, { icon: '✉️', image: '', name: '意见反馈', link: '/feedback' }], backgroundColor: '#ffffff' } },
             ]},
           ]
         }
@@ -4587,7 +4589,7 @@
       const bannerAutoplayTimers = {};
       const tabbarConfig = {
         defaultColor: '#94a3b8',
-        activeColor: '#1677ff',
+        activeColor: '#ff6034',
         fontSize: 11,
         showText: true,
         backgroundColor: '#ffffff',
@@ -4598,6 +4600,8 @@
       let tabItems = [
         { id: 'tab-home', name: '首页', active: true, targetPageId: '', defaultIconUrl: '', activeIconUrl: '' },
         { id: 'tab-category', name: '分类', active: false, targetPageId: '', defaultIconUrl: '', activeIconUrl: '' },
+        { id: 'tab-cart', name: '购物车', active: false, targetPageId: '', defaultIconUrl: '', activeIconUrl: '' },
+        { id: 'tab-favorites', name: '收藏', active: false, targetPageId: '', defaultIconUrl: '', activeIconUrl: '' },
         { id: 'tab-mine', name: '我的', active: false, targetPageId: '', defaultIconUrl: '', activeIconUrl: '' },
       ];
 
@@ -4982,6 +4986,21 @@
         const bgColor = isActive ? tabbarConfig.activeColor : '#e2e8f0';
         return getTabPlaceholderSvg(label, color, bgColor);
       }
+
+      var orderIconSvgs = {
+        '待付款': '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>',
+        '待发货': '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+        '待收货': '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>',
+        '待评价': '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>',
+        '退换/售后': '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9m-9 9a9 9 0 019-9"/></svg>'
+      };
+      var menuIconSvgs = {
+        '收货地址': '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6034" stroke-width="2" stroke-linecap="round" style="width:20px;height:20px;flex-shrink:0;margin-right:10px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+        '浏览记录': '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6034" stroke-width="2" stroke-linecap="round" style="width:20px;height:20px;flex-shrink:0;margin-right:10px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+        '卡券绑定': '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6034" stroke-width="2" stroke-linecap="round" style="width:20px;height:20px;flex-shrink:0;margin-right:10px;"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="12" y1="4" x2="12" y2="10"/></svg>',
+        '帮助中心': '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6034" stroke-width="2" stroke-linecap="round" style="width:20px;height:20px;flex-shrink:0;margin-right:10px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+        '意见反馈': '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6034" stroke-width="2" stroke-linecap="round" style="width:20px;height:20px;flex-shrink:0;margin-right:10px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>'
+      };
 
       function getComponentPropsMarkup(floor) {
         if (!floor) {
@@ -6410,7 +6429,7 @@
           var memberLevel = config.memberLevel || '普通会员';
           var showLevelBadge = config.showLevelBadge !== false;
           var showSettingsIcon = config.showSettingsIcon !== false;
-          var backgroundColor = config.backgroundColor || '#FF3B30';
+          var backgroundColor = config.backgroundColor || '#ff6034';
 
           return '' +
             '<div class="config-section">' +
@@ -6452,7 +6471,7 @@
         }
         if (floor.type === 'mine-stats-bar') {
           var config = floor.mineStatsBarConfig || {};
-          var backgroundColor = config.backgroundColor || '#FF3B30';
+          var backgroundColor = config.backgroundColor || '#ff6034';
           var statsItems = config.statsItems || [
             { value: '1,280', label: '积分中心', link: '/points' },
             { value: '5', label: '卡券', link: '/coupons' },
@@ -6493,30 +6512,38 @@
             '</div>';
         }
         if (floor.type === 'mine-nav-grid') {
+
           var config = floor.mineNavGridConfig || {};
           var title = config.title || '我的服务';
           var showTitle = config.showTitle !== false;
           var columns = config.columns || 4;
           var navItems = config.navItems || [
-            { icon: '🎁', name: '积分商城', jumpType: 'none', jumpTarget: '' },
-            { icon: '💰', name: '我的积分', jumpType: 'none', jumpTarget: '' },
-            { icon: '👑', name: '会员权益', jumpType: 'none', jumpTarget: '' },
-            { icon: '🎫', name: '我的优惠券', jumpType: 'none', jumpTarget: '' },
+            { icon: '🎁', image: '', name: '积分商城', jumpType: 'none', jumpTarget: '' },
+            { icon: '💰', image: '', name: '我的积分', jumpType: 'none', jumpTarget: '' },
+            { icon: '👑', image: '', name: '会员权益', jumpType: 'none', jumpTarget: '' },
+            { icon: '🎫', image: '', name: '我的优惠券', jumpType: 'none', jumpTarget: '' },
           ];
           var backgroundColor = config.backgroundColor || '#ffffff';
 
           var navItemsHtml = navItems.map(function(item, index) {
+            var imageSelectorHtml = generateImageSelectorHTML({
+              imageUrl: item.image || '',
+              previewId: 'mine-nav-img-preview-' + index,
+              uploadBtnId: 'mine-nav-upload-btn-' + index,
+              libraryBtnId: 'mine-nav-library-btn-' + index,
+              fileInputId: 'mine-nav-file-input-' + index,
+              tip: ''
+            });
+
             return '<div class="config-nested-item" style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
-              '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">导航项 ' + (index + 1) + '</div>' +
-              '<div class="config-grid">' +
-                '<div class="config-item">' +
-                  '<label>图标</label>' +
-                  '<input type="text" id="mine-nav-icon-' + index + '" value="' + item.icon + '" placeholder="图标" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;" />' +
-                '</div>' +
-                '<div class="config-item">' +
-                  '<label>名称</label>' +
-                  '<input type="text" id="mine-nav-name-' + index + '" value="' + item.name + '" placeholder="名称" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;" />' +
-                '</div>' +
+              '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">导航项 ' + (index + 1) + '</div>' +
+              '<div style="margin-bottom:8px;">' +
+                '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">名称</label>' +
+                '<input type="text" id="mine-nav-name-' + index + '" value="' + item.name + '" placeholder="输入名称" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;" />' +
+              '</div>' +
+              '<div style="margin-bottom:8px;">' +
+                '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">图标</label>' +
+                imageSelectorHtml +
               '</div>' +
               generateJumpConfigHTML({
                 jumpType: item.jumpType || 'none',
@@ -6524,7 +6551,8 @@
                 typeSelectId: 'mine-nav-jump-type',
                 targetInputId: 'mine-nav-jump-target',
                 index: index,
-                label: '跳转配置'
+                label: '跳转配置',
+                excludeTypes: ['category', 'brand', 'tag', 'product']
               }) +
             '</div>';
           }).join('');
@@ -6561,6 +6589,22 @@
                   '<label>背景颜色</label>' +
                   '<input type="color" id="mine-nav-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
                 '</div>' +
+                '<div class="config-item">' +
+                  '<label>容器边角</label>' +
+                  '<select id="mine-nav-corner">' +
+                    '<option value="rounded" ' + ((config.cornerStyle || 'rounded') === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + ((config.cornerStyle || 'rounded') === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="mine-nav-page-padding" min="0" max="30" value="' + (config.pagePadding || 0) + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
               '</div>' +
             '</div>' +
             '<div class="config-section">' +
@@ -6572,28 +6616,36 @@
             '</div>';
         }
         if (floor.type === 'mine-menu-list') {
+
           var config = floor.mineMenuListConfig || {};
           var title = config.title || '更多服务';
           var showTitle = config.showTitle !== false;
           var menuItems = config.menuItems || [
-            { icon: '📦', name: '我的订单', jumpType: 'none', jumpTarget: '' },
-            { icon: '📍', name: '收货地址', jumpType: 'none', jumpTarget: '' },
-            { icon: '⚙️', name: '设置', jumpType: 'none', jumpTarget: '' },
+            { icon: '📦', image: '', name: '我的订单', jumpType: 'none', jumpTarget: '' },
+            { icon: '📍', image: '', name: '收货地址', jumpType: 'none', jumpTarget: '' },
+            { icon: '⚙️', image: '', name: '设置', jumpType: 'none', jumpTarget: '' },
           ];
           var backgroundColor = config.backgroundColor || '#ffffff';
 
           var menuItemsHtml = menuItems.map(function(item, index) {
+            var imageSelectorHtml = generateImageSelectorHTML({
+              imageUrl: item.image || '',
+              previewId: 'mine-menu-img-preview-' + index,
+              uploadBtnId: 'mine-menu-upload-btn-' + index,
+              libraryBtnId: 'mine-menu-library-btn-' + index,
+              fileInputId: 'mine-menu-file-input-' + index,
+              tip: ''
+            });
+
             return '<div class="config-nested-item" style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
-              '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">菜单项 ' + (index + 1) + '</div>' +
-              '<div class="config-grid">' +
-                '<div class="config-item">' +
-                  '<label>图标</label>' +
-                  '<input type="text" id="mine-menu-icon-' + index + '" value="' + item.icon + '" placeholder="图标" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;" />' +
-                '</div>' +
-                '<div class="config-item">' +
-                  '<label>名称</label>' +
-                  '<input type="text" id="mine-menu-name-' + index + '" value="' + item.name + '" placeholder="名称" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;" />' +
-                '</div>' +
+              '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">菜单项 ' + (index + 1) + '</div>' +
+              '<div style="margin-bottom:8px;">' +
+                '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">名称</label>' +
+                '<input type="text" id="mine-menu-name-' + index + '" value="' + item.name + '" placeholder="输入名称" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;" />' +
+              '</div>' +
+              '<div style="margin-bottom:8px;">' +
+                '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">图标</label>' +
+                imageSelectorHtml +
               '</div>' +
               generateJumpConfigHTML({
                 jumpType: item.jumpType || 'none',
@@ -6601,7 +6653,8 @@
                 typeSelectId: 'mine-menu-jump-type',
                 targetInputId: 'mine-menu-jump-target',
                 index: index,
-                label: '跳转配置'
+                label: '跳转配置',
+                excludeTypes: ['category', 'brand', 'tag', 'product']
               }) +
             '</div>';
           }).join('');
@@ -6629,6 +6682,22 @@
                 '<div class="config-item">' +
                   '<label>背景颜色</label>' +
                   '<input type="color" id="mine-menu-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>容器边角</label>' +
+                  '<select id="mine-menu-corner">' +
+                    '<option value="rounded" ' + ((config.cornerStyle || 'rounded') === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + ((config.cornerStyle || 'rounded') === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="mine-menu-page-padding" min="0" max="30" value="' + (config.pagePadding || 0) + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
                 '</div>' +
               '</div>' +
             '</div>' +
@@ -9064,16 +9133,24 @@
             });
           }
 
+          var navCornerEl = document.getElementById('mine-nav-corner');
+          if (navCornerEl) {
+            navCornerEl.addEventListener('change', function () {
+              mineNavGridConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          var navPaddingEl = document.getElementById('mine-nav-page-padding');
+          if (navPaddingEl) {
+            navPaddingEl.addEventListener('input', function () {
+              mineNavGridConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
           // 导航项配置
           mineNavGridConfig.navItems.forEach(function(item, index) {
-            var iconEl = document.getElementById('mine-nav-icon-' + index);
-            if (iconEl) {
-              iconEl.addEventListener('input', function () {
-                mineNavGridConfig.navItems[index].icon = this.value;
-                renderCanvas();
-              });
-            }
-
             var nameEl = document.getElementById('mine-nav-name-' + index);
             if (nameEl) {
               nameEl.addEventListener('input', function () {
@@ -9081,6 +9158,19 @@
                 renderCanvas();
               });
             }
+          });
+
+          // 为每个导航项绑定图片选择器事件
+          mineNavGridConfig.navItems.forEach(function(item, index) {
+            bindImageSelectorEvents({
+              fileInputId: 'mine-nav-file-input-' + index,
+              libraryBtnId: 'mine-nav-library-btn-' + index,
+              previewId: 'mine-nav-img-preview-' + index,
+              onImageSelected: function(imageUrl) {
+                mineNavGridConfig.navItems[index].image = imageUrl;
+                renderCanvas();
+              }
+            });
           });
 
           // 跳转类型选择
@@ -9127,7 +9217,7 @@
           var addNavItemBtn = document.getElementById('mine-nav-add-item');
           if (addNavItemBtn) {
             addNavItemBtn.addEventListener('click', function () {
-              mineNavGridConfig.navItems.push({ icon: '📌', name: '新导航', jumpType: 'none', jumpTarget: '' });
+              mineNavGridConfig.navItems.push({ icon: '📌', image: '', name: '新导航', jumpType: 'none', jumpTarget: '' });
               renderComponentPropsPanel();
               renderCanvas();
             });
@@ -9163,16 +9253,24 @@
             });
           }
 
+          var menuCornerEl = document.getElementById('mine-menu-corner');
+          if (menuCornerEl) {
+            menuCornerEl.addEventListener('change', function () {
+              mineMenuListConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          var menuPaddingEl = document.getElementById('mine-menu-page-padding');
+          if (menuPaddingEl) {
+            menuPaddingEl.addEventListener('input', function () {
+              mineMenuListConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
           // 菜单项配置
           mineMenuListConfig.menuItems.forEach(function(item, index) {
-            var iconEl = document.getElementById('mine-menu-icon-' + index);
-            if (iconEl) {
-              iconEl.addEventListener('input', function () {
-                mineMenuListConfig.menuItems[index].icon = this.value;
-                renderCanvas();
-              });
-            }
-
             var nameEl = document.getElementById('mine-menu-name-' + index);
             if (nameEl) {
               nameEl.addEventListener('input', function () {
@@ -9180,6 +9278,19 @@
                 renderCanvas();
               });
             }
+          });
+
+          // 为每个菜单项绑定图片选择器事件
+          mineMenuListConfig.menuItems.forEach(function(item, index) {
+            bindImageSelectorEvents({
+              fileInputId: 'mine-menu-file-input-' + index,
+              libraryBtnId: 'mine-menu-library-btn-' + index,
+              previewId: 'mine-menu-img-preview-' + index,
+              onImageSelected: function(imageUrl) {
+                mineMenuListConfig.menuItems[index].image = imageUrl;
+                renderCanvas();
+              }
+            });
           });
 
           // 跳转类型选择
@@ -9226,7 +9337,7 @@
           var addMenuItemBtn = document.getElementById('mine-menu-add-item');
           if (addMenuItemBtn) {
             addMenuItemBtn.addEventListener('click', function () {
-              mineMenuListConfig.menuItems.push({ icon: '📋', name: '新菜单', jumpType: 'none', jumpTarget: '' });
+              mineMenuListConfig.menuItems.push({ icon: '📋', image: '', name: '新菜单', jumpType: 'none', jumpTarget: '' });
               renderComponentPropsPanel();
               renderCanvas();
             });
@@ -11664,21 +11775,28 @@
           var memberLevel = config.memberLevel || '普通会员';
           var showLevelBadge = config.showLevelBadge !== false;
           var showSettingsIcon = config.showSettingsIcon !== false;
-          var backgroundColor = config.backgroundColor || '#FF3B30';
-          var gradientBg = 'linear-gradient(180deg, ' + backgroundColor + ' 0%, ' + backgroundColor + 'cc 100%)';
+          var backgroundColor = config.backgroundColor || '#ff6034';
+          var hex = backgroundColor.replace('#', '');
+          var r = Math.max(0, parseInt(hex.substring(0,2), 16) - 30);
+          var g = Math.max(0, parseInt(hex.substring(2,4), 16) - 20);
+          var b = Math.max(0, parseInt(hex.substring(4,6), 16) - 10);
+          var endColor = '#' + (r < 16 ? '0' : '') + r.toString(16) + (g < 16 ? '0' : '') + g.toString(16) + (b < 16 ? '0' : '') + b.toString(16);
+          var gradientBg = 'linear-gradient(135deg, ' + backgroundColor + ', ' + endColor + ')';
 
+          var avatarSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:28px;height:28px;color:rgba(255,255,255,0.7);"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+          var settingsSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:22px;height:22px;color:#fff;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>';
           return '<div class="canvas-block-mine-header" style="background:' + gradientBg + ';">' +
-            '<div class="canvas-mine-avatar">' + (avatarUrl ? '<img src="' + avatarUrl + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />' : '👤') + '</div>' +
+            '<div class="canvas-mine-avatar">' + (avatarUrl ? '<img src="' + avatarUrl + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />' : avatarSvg) + '</div>' +
             '<div class="canvas-mine-info">' +
               '<div class="canvas-mine-nickname">' + nickname + '</div>' +
               (showLevelBadge && memberLevel ? '<div class="canvas-mine-level">' + memberLevel + '</div>' : '') +
             '</div>' +
-            (showSettingsIcon ? '<div class="canvas-mine-settings">⚙️</div>' : '') +
+            (showSettingsIcon ? '<div class="canvas-mine-settings">' + settingsSvg + '</div>' : '') +
           '</div>';
         }
         if (floor.type === 'mine-stats-bar') {
           var config = floor.mineStatsBarConfig || {};
-          var backgroundColor = config.backgroundColor || '#FF3B30';
+          var backgroundColor = config.backgroundColor || '#ff6034';
           var statsItems = config.statsItems || [
             { value: '1,280', label: '积分中心', link: '/points' },
             { value: '5', label: '卡券', link: '/coupons' },
@@ -11691,7 +11809,7 @@
             '</div>';
           }).join('');
 
-          return '<div class="canvas-block-mine-stats-bar" style="background:' + backgroundColor + ';">' +
+          return '<div class="canvas-block-mine-stats-bar" style="background:' + backgroundColor + ';border-radius:0 0 18px 18px;">' +
             statsHtml +
           '</div>';
         }
@@ -11709,26 +11827,48 @@
           ];
           var backgroundColor = config.backgroundColor || '#ffffff';
 
-          var itemsHtml = navItems.map(function(item) {
-            var iconColor = item.iconColor || 'blue';
-            return '<div class="canvas-mine-nav-item">' +
-              '<div class="canvas-mine-nav-icon icon-' + iconColor + '">' + item.icon + '</div>' +
-              (item.badge ? '<div class="canvas-mine-nav-badge">' + item.badge + '</div>' : '') +
-              '<div class="canvas-mine-nav-name">' + item.name + '</div>' +
-            '</div>';
-          }).join('');
+          var isFixedOrders = !!floor.fixed && columns === 5;
+          if (isFixedOrders) {
+            // Fixed order section: use SVG icons from reference, no colored background
+            var itemsHtml = navItems.map(function(item) {
+              var svgIcon = orderIconSvgs[item.name] || '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/></svg>';
+              return '<div class="canvas-mine-nav-item">' +
+                svgIcon +
+                (item.badge ? '<div class="canvas-mine-nav-badge">' + item.badge + '</div>' : '') +
+                '<div class="canvas-mine-nav-name">' + item.name + '</div>' +
+              '</div>';
+            }).join('');
+          } else {
+            // Configurable grid: image or emoji icons with gradient backgrounds
+            var itemsHtml = navItems.map(function(item) {
+              var iconColor = item.iconColor || 'blue';
+              var iconHtml = '';
+              if (item.image) {
+                iconHtml = '<img src="' + item.image + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />';
+              } else {
+                iconHtml = item.icon;
+              }
+              return '<div class="canvas-mine-nav-item">' +
+                '<div class="canvas-mine-nav-icon icon-' + iconColor + '">' + iconHtml + '</div>' +
+                (item.badge ? '<div class="canvas-mine-nav-badge">' + item.badge + '</div>' : '') +
+                '<div class="canvas-mine-nav-name">' + item.name + '</div>' +
+              '</div>';
+            }).join('');
+          }
 
           var titleHtml = '';
           if (showTitle) {
             titleHtml = '<div class="canvas-mine-nav-title">' +
               '<span>' + title + '</span>' +
-              (showViewAll ? '<span class="canvas-mine-nav-title-link">查看全部 ›</span>' : '') +
+              (showViewAll ? '<span class="canvas-mine-nav-title-link"><span style="display:flex;align-items:center;gap:2px;">查看全部<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;"><polyline points="9 18 15 12 9 6"/></svg></span></span>' : '') +
             '</div>';
           }
 
-          return '<div class="canvas-block-mine-nav-grid" style="background:' + backgroundColor + ';">' +
+          var navCornerStyle = (config.cornerStyle || 'rounded') === 'rounded' ? '16px' : '0';
+          var navPagePadding = config.pagePadding || 0;
+          return '<div class="canvas-block-mine-nav-grid" style="background:' + backgroundColor + ';border-radius:' + navCornerStyle + ';margin:0 ' + navPagePadding + 'px;">' +
             titleHtml +
-            '<div class="canvas-mine-nav-grid" style="grid-template-columns:repeat(' + columns + ', 1fr);">' +
+            '<div class="' + (isFixedOrders ? 'order-tabs' : 'canvas-mine-nav-grid') + '" style="' + (isFixedOrders ? 'display:flex;padding:0 8px 12px;' : 'grid-template-columns:repeat(' + columns + ', 1fr);') + '">' +
               itemsHtml +
             '</div>' +
           '</div>';
@@ -11745,14 +11885,22 @@
           var backgroundColor = config.backgroundColor || '#ffffff';
 
           var itemsHtml = menuItems.map(function(item) {
+            var iconHtml = '';
+            if (item.image) {
+              iconHtml = '<div class="canvas-mine-menu-icon"><img src="' + item.image + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" /></div>';
+            } else {
+              iconHtml = menuIconSvgs[item.name] || '<div class="canvas-mine-menu-icon">' + item.icon + '</div>';
+            }
             return '<div class="canvas-mine-menu-item">' +
-              '<div class="canvas-mine-menu-icon">' + item.icon + '</div>' +
+              iconHtml +
               '<div class="canvas-mine-menu-name">' + item.name + '</div>' +
-              '<div class="canvas-mine-menu-arrow">›</div>' +
+              '<span class="canvas-mine-menu-arrow">&gt;</span>' +
             '</div>';
           }).join('');
 
-          return '<div class="canvas-block-mine-menu-list" style="background:' + backgroundColor + ';">' +
+          var menuCornerStyle = (config.cornerStyle || 'rounded') === 'rounded' ? '16px' : '0';
+          var menuPagePadding = config.pagePadding || 0;
+          return '<div class="canvas-block-mine-menu-list" style="background:' + backgroundColor + ';border-radius:' + menuCornerStyle + ';margin:0 ' + menuPagePadding + 'px;">' +
             (showTitle ? '<div class="canvas-mine-menu-title">' + title + '</div>' : '') +
             itemsHtml +
           '</div>';
@@ -11844,7 +11992,7 @@
           const fixedClass = floor.fixed ? ' fixed' : '';
 
           html += '<div class="page-layout-item' + (isActive ? ' active' : '') + fixedClass + '" data-floor-id="' + floor.id + '">' +
-            '<div class="item-name">' + floorName + (floor.fixed ? ' <span style="font-size:10px;color:#999;font-weight:400;">（固定）</span>' : '') + '</div>' +
+            '<div class="item-name">' + floorName + '</div>' +
           '</div>';
         });
 
@@ -12051,7 +12199,7 @@
           phoneShell.style.display = hasCurrentPage ? 'flex' : 'none';
         }
         if (canvasSideActions) {
-          canvasSideActions.style.display = hasCurrentPage ? 'flex' : 'none';
+          canvasSideActions.style.display = (hasCurrentPage && getCurrentFloor()) ? 'flex' : 'none';
         }
 
         // 控制组件拖拽提示：只有选中页面且页面没有组件时才显示
@@ -12135,8 +12283,7 @@
             }
           }
           return `
-            <div class="canvas-floor-card ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
-              ${floor.fixed ? '<div class="canvas-floor-fixed-badge">固定</div>' : ''}
+            <div class="canvas-floor-card ${floor.fixed ? 'floor-fixed' : ''} ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
               <div class="canvas-floor-body">
                 ${createFloorMarkup(floor)}
               </div>
