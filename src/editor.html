@@ -408,6 +408,18 @@
     .canvas-floor-card.category-showcase-card.active .canvas-block-category-showcase {
       box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.14);
     }
+    /* 轮播图延伸模式：允许延伸层突破容器边界 */
+    .canvas-floor-card.carousel-extend-card {
+      overflow: visible;
+      z-index: 0;
+    }
+    .canvas-floor-card.carousel-extend-card.active {
+      box-shadow: none;
+    }
+    .canvas-floor-card.carousel-extend-card .canvas-floor-body.carousel-extend-body {
+      overflow: visible;
+      padding: 2px;
+    }
     .canvas-floor-card.draggable { cursor: grab; }
     .canvas-floor-card.dragging { opacity: 0.55; transform: scale(0.99); }
     .canvas-floor-card.drop-target { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.18); }
@@ -4124,8 +4136,8 @@
           defaultConfig: {
             // 图片配置
             slides: [
-              { image: '../assets/banner素材.jpg', link: '' },
-              { image: '../assets/banner素材2.jpg', link: '' },
+              { image: '../assets/banner素材.jpg', link: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '../assets/banner素材2.jpg', link: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
             ],
             // 图片样式
             height: 180,
@@ -4536,7 +4548,7 @@
           templates: [
             { id: 'home-standard', name: '标准首页', desc: '包含搜索框、轮播图、图文导航、商品推荐、置顶功能等模块', previewIcon: '📱', floors: [
               { id: 'floor-search', type: 'search-bar', name: '搜索框', desc: '顶部搜索入口', searchBarConfig: { placeholder: '搜索商品、优惠券、活动', backgroundColor: '#f3f6fb', borderRadius: 17, height: 34, showScanIcon: false, showVoiceIcon: false } },
-              { id: 'floor-carousel', type: 'carousel', name: '轮播图', desc: '主视觉焦点图', carouselConfig: { slides: [{ image: '../assets/banner素材.jpg', jumpType: 'none', jumpTarget: '' }, { image: '../assets/banner素材2.jpg', jumpType: 'none', jumpTarget: '' }], height: 180, borderRadius: 8, cornerStyle: 'rounded', autoplay: true, interval: 3000, dotStyle: 'round', dotPosition: 'bottom', backgroundColor: '#ffffff' } },
+              { id: 'floor-carousel', type: 'carousel', name: '轮播图', desc: '主视觉焦点图', carouselConfig: { slides: [{ image: '../assets/banner素材.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' }, { image: '../assets/banner素材2.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' }], height: 180, borderRadius: 8, cornerStyle: 'rounded', autoplay: true, interval: 3000, dotStyle: 'round', dotPosition: 'bottom', backgroundColor: '#ffffff' } },
               { id: 'floor-icon-nav', type: 'icon-nav', name: '图文导航', desc: '核心功能入口导航', iconNavConfig: { template: 'image-nav', layoutStyle: 'fixed', rows: 1, navItems: [{ icon: '⚡', image: '', text: '限时秒杀', link: '' }, { icon: '🏷️', image: '', text: '品牌特卖', link: '' }, { icon: '🆕', image: '', text: '新品上市', link: '' }, { icon: '🔥', image: '', text: '热销榜', link: '' }, { icon: '🎫', image: '', text: '领券中心', link: '' }], backgroundColor: '#ffffff', textColor: '#333333', textSize: 12 } },
               { id: 'floor-goods', type: 'goods-list', name: '商品推荐', desc: '商品列表展示', goodsListConfig: { listStyle: 'large-single', dataSource: 'brand', sortType: 'comprehensive', backgroundColor: '#ffffff', showSpuName: true, showSkuSpec: true, showPrice: true, showTag: false, cartStyle: 'style1', cornerTag: 'none', customCornerTag: '', goodsCount: 20 } },
               { id: 'floor-float-btn', type: 'float-button', name: '悬浮组件', desc: '悬浮功能按钮', floatButtonConfig: { position: 'right', bottomMargin: 80, buttonGap: 12, buttons: [{ id: 'btn-1', type: 'back-top', enabled: true, name: '置顶', backgroundColor: '#ff6b35', iconColor: '#ffffff', buttonSize: 44, borderRadius: 50, jumpType: 'none', jumpTarget: '' }] } },
@@ -5616,9 +5628,9 @@
           // 确保 slides 数组存在
           if (!Array.isArray(config.slides) || config.slides.length === 0) {
             config.slides = [
-              { image: '', jumpType: 'none', jumpTarget: '' },
-              { image: '', jumpType: 'none', jumpTarget: '' },
-              { image: '', jumpType: 'none', jumpTarget: '' },
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
             ];
           }
           var slides = config.slides;
@@ -5631,7 +5643,6 @@
           var dotStyle = config.dotStyle || 'round'; // round 圆形, bar 长条形
           var dotPosition = config.dotPosition || 'bottom'; // bottom 底部, inside 内嵌
           var pagePadding = config.pagePadding || 0;
-          var styleMode = config.styleMode || 'standard';
 
           // 生成图片列表HTML
           var slidesRowsHtml = slides.map(function(slide, index) {
@@ -5643,16 +5654,6 @@
               fileInputId: 'carousel-file-input-' + index,
               tip: ''
             });
-            return '' +
-              '<div class="carousel-slide-row" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafafa;">' +
-                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
-                  '<span style="font-size:13px;font-weight:500;color:var(--text);">图片 ' + (index + 1) + '</span>' +
-                  (slides.length > 1 ? '<button type="button" class="btn btn-danger btn-sm carousel-slide-remove" data-index="' + index + '" style="padding:2px 8px;">删除</button>' : '') +
-                '</div>' +
-                '<div style="margin-bottom:8px;">' +
-                  '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">轮播图片</label>' +
-                  imageSelectorHtml +
-                '</div>' +
                 generateJumpConfigHTML({
                   jumpType: slide.jumpType || 'none',
                   jumpTarget: slide.jumpTarget || '',
@@ -5674,19 +5675,6 @@
                   '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;">支持多张图片轮播；仅一张时不轮播。可粘贴图片URL或点击「选择文件」上传本地图。</p>' +
                 '</div>' +
               '</div>' +
-            '</div>' +
-            '<div class="config-section">' +
-              '<div class="config-section-title">风格设置</div>' +
-              '<div class="config-grid">' +
-                '<div class="config-item">' +
-                  '<label>展示风格</label>' +
-                  '<select id="carousel-style-mode" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
-                    '<option value="standard" ' + (styleMode === 'standard' ? 'selected' : '') + '>标准</option>' +
-                    '<option value="immersive" ' + (styleMode === 'immersive' ? 'selected' : '') + '>沉浸式</option>' +
-                  '</select>' +
-                '</div>' +
-              '</div>' +
-              (styleMode === 'immersive' ? '<p style="font-size:11px;color:var(--text-muted);margin-top:4px;line-height:1.5;">沉浸式：图片铺满全宽，无边距、无圆角、无背景色</p>' : '') +
             '</div>' +
             '<div class="config-section">' +
               '<div class="config-section-title">图片样式</div>' +
@@ -8034,9 +8022,9 @@
           // 确保 slides 数组存在
           if (!Array.isArray(carouselConfig.slides) || carouselConfig.slides.length === 0) {
             carouselConfig.slides = [
-              { image: '', jumpType: 'none', jumpTarget: '' },
-              { image: '', jumpType: 'none', jumpTarget: '' },
-              { image: '', jumpType: 'none', jumpTarget: '' },
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
             ];
           }
 
@@ -8044,7 +8032,7 @@
           var addSlideBtn = document.getElementById('carousel-add-slide');
           if (addSlideBtn) {
             addSlideBtn.addEventListener('click', function () {
-              carouselConfig.slides.push({ image: '', jumpType: 'none', jumpTarget: '' });
+              carouselConfig.slides.push({ image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' });
               renderComponentPropsPanel();
               renderCanvas();
             });
@@ -8109,7 +8097,7 @@
               var idx = parseInt(this.dataset.index, 10);
               carouselConfig.slides.splice(idx, 1);
               if (carouselConfig.slides.length === 0) {
-                carouselConfig.slides.push({ image: '', jumpType: 'none', jumpTarget: '' });
+                carouselConfig.slides.push({ image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' });
               }
               renderComponentPropsPanel();
               renderCanvas();
@@ -8139,16 +8127,6 @@
           if (imageCornerEl) {
             imageCornerEl.addEventListener('change', function () {
               carouselConfig.imageCorner = this.value;
-              renderCanvas();
-            });
-          }
-
-          // 风格设置
-          var styleModeEl = document.getElementById('carousel-style-mode');
-          if (styleModeEl) {
-            styleModeEl.addEventListener('change', function () {
-              carouselConfig.styleMode = this.value;
-              renderComponentPropsPanel();
               renderCanvas();
             });
           }
@@ -11239,17 +11217,54 @@
           var dotStyle = config.dotStyle || 'round';
           var dotPosition = config.dotPosition || 'bottom';
           var pagePadding = config.pagePadding || 0;
-          var styleMode = config.styleMode || 'standard';
 
           // 图片边角
           var imageBorderRadius = imageCorner === 'square' ? '0' : '8px';
 
+          // 延伸样式 - 使用第一张有图片的slide的extendHeight和extendMode
+          var extendLayerHtml = '';
+          var extendContainerStyle = '';
+          var hasExtend = false;
+          if (slides.length) {
+            // 获取第一张有图片且有延伸设置的slide
+            var firstSlideWithExtend = slides.find(function(s) {
+              if (!s.image || s.extendHeight <= 0) return false;
+              if (s.extendMode === 'stretch') return s.extendImage;
+              return true; // copy模式只需要主图片
+            });
+            if (firstSlideWithExtend) {
+              hasExtend = true;
+              var extendHeight = firstSlideWithExtend.extendHeight;
+              var extendMode = firstSlideWithExtend.extendMode || 'copy';
+              var extendImgStyle = '';
+              var extendImgSrc = '';
+
+              if (extendMode === 'stretch' && firstSlideWithExtend.extendImage) {
+                // 拉伸填充模式：使用延伸图片
+                extendImgSrc = firstSlideWithExtend.extendImage;
+                extendImgStyle = 'width:100%;height:100%;object-fit:cover;';
+              } else {
+                // 复制重复模式：使用主图片，定位到顶部
+                extendImgSrc = firstSlideWithExtend.image;
+                // 使用较大的高度让图片顶部区域重复填充延伸区域
+                extendImgStyle = 'width:100%;height:auto;min-height:100%;object-fit:cover;object-position:top;';
+              }
+
+              // 延伸层使用绝对定位向上延伸
+              // z-index 设为 0，上方组件应有更高的 z-index 来遮挡延伸层
+              // 容器设置 overflow:visible 让延伸层能突破边界
+              extendLayerHtml = '<div class="carousel-extend-layer" style="position:absolute;top:-' + extendHeight + 'px;left:0;right:0;height:' + extendHeight + 'px;z-index:0;overflow:hidden;border-radius:' + imageBorderRadius + ' ' + imageBorderRadius + ' 0 0;pointer-events:none;">' +
+                '<img src="' + extendImgSrc + '" style="' + extendImgStyle + 'border-radius:' + imageBorderRadius + ' ' + imageBorderRadius + ' 0 0;" alt="延伸背景" />' +
+              '</div>';
+              // 容器设置 overflow:visible 让延伸层突破边界，position:relative 作为定位基准
+              extendContainerStyle = 'position:relative;overflow:visible;';
+            }
+          }
+
           // 如果没有图片，显示占位
           if (!slides.length || slides.every(function(s) { return !s.image; })) {
-            var placeholderRadius = styleMode === 'immersive' ? '0' : (imageCorner === 'square' ? '0' : '8px');
-            var placeholderPadding = styleMode === 'immersive' ? '0' : pagePadding;
-            var placeholderBg = styleMode === 'immersive' ? 'transparent' : '#f5f5f5';
-            return '<div class="canvas-carousel" style="background:' + placeholderBg + ';height:' + height + 'px;border-radius:' + placeholderRadius + ';margin:10px ' + placeholderPadding + 'px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--border);">' +
+            var placeholderRadius = imageCorner === 'square' ? '0' : '8px';
+            return '<div class="canvas-carousel" style="background:#f5f5f5;height:' + height + 'px;border-radius:' + placeholderRadius + ';margin:10px ' + pagePadding + 'px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--border);">' +
               '<div style="text-align:center;color:var(--text-muted);">' +
                 '<div style="font-size:32px;margin-bottom:8px;">🖼️</div>' +
                 '<div style="font-size:13px;">点击添加轮播图片</div>' +
@@ -11287,17 +11302,11 @@
           // 边角样式
           var containerBorderRadius = cornerStyle === 'square' ? '0' : '8px';
 
-          // 沉浸式模式：覆盖样式参数
-          if (styleMode === 'immersive') {
-            containerBorderRadius = '0';
-            imageBorderRadius = '0';
-            backgroundColor = 'transparent';
-            pagePadding = 0;
-          }
-
+          // 延伸模式下，容器顶部不需要特殊圆角处理（延伸层已单独处理圆角）
           var carouselImageRadius = imageBorderRadius;
 
-          return '<div class="canvas-carousel" style="background:' + backgroundColor + ';padding:10px ' + pagePadding + 'px;border-radius:' + containerBorderRadius + ';">' +
+          return '<div class="canvas-carousel" style="background:' + backgroundColor + ';padding:10px ' + pagePadding + 'px;border-radius:' + containerBorderRadius + ';' + extendContainerStyle + '">' +
+            extendLayerHtml +
             '<div class="carousel-wrapper" style="position:relative;overflow:hidden;border-radius:' + carouselImageRadius + ';">' +
               '<div class="carousel-track" style="display:flex;transition:transform 0.3s ease;">' +
                 slidesHtml +
@@ -12182,7 +12191,24 @@
               </div>
             `;
           }
-          return `
+          // 轮播图组件延伸模式需要 overflow:visible 让延伸层突破
+          if (floor.type === 'carousel' && floor.carouselConfig && floor.carouselConfig.slides) {
+            var hasExtendSlide = floor.carouselConfig.slides.some(function(s) {
+              if (!s.image || s.extendHeight <= 0) return false;
+              // copy模式只需要主图片，stretch模式需要extendImage
+              if (s.extendMode === 'stretch') return s.extendImage;
+              return true;
+            });
+            if (hasExtendSlide) {
+              return `
+              <div class="canvas-floor-card carousel-extend-card ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
+                <div class="canvas-floor-body carousel-extend-body">
+                  ${createFloorMarkup(floor)}
+                </div>
+              </div>
+            `;
+            }
+          }
           return `
             <div class="canvas-floor-card ${floor.fixed ? 'floor-fixed' : ''} ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
               <div class="canvas-floor-body">
