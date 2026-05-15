@@ -7474,6 +7474,13 @@
             '<div class="config-section">' +
               '<div class="config-section-title">顶部导航栏标题</div>' +
               '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>是否显示标题</label>' +
+                  '<select id="props-show-navbar-title">' +
+                    '<option value="true" ' + (currentPage && currentPage.showNavbarTitle !== false ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (currentPage && currentPage.showNavbarTitle === false ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
                 '<div class="config-item" style="grid-column:1 / -1;">' +
                   '<label>导航栏标题</label>' +
                   '<input type="text" id="props-navbar-title-input" value="' + (currentPage ? (currentPage.navbarTitle || currentPage.name || '') : '') + '" placeholder="输入导航栏标题" />' +
@@ -7487,6 +7494,15 @@
             pageNameInput.addEventListener('input', function () {
               currentPage.name = this.value;
               renderPagesPanel();
+              renderCanvas();
+            });
+          }
+
+          // 绑定是否显示标题事件
+          var showNavbarTitleEl = document.getElementById('props-show-navbar-title');
+          if (showNavbarTitleEl && currentPage) {
+            showNavbarTitleEl.addEventListener('change', function () {
+              currentPage.showNavbarTitle = this.value === 'true';
               renderCanvas();
             });
           }
@@ -12182,7 +12198,13 @@
         }
         // 更新画布内的页面标题栏
         if (canvasNavbarTitle) {
-          canvasNavbarTitle.textContent = currentPage.navbarTitle || currentPage.name || '未命名页面';
+          if (currentPage.showNavbarTitle === false) {
+            canvasNavbarTitle.textContent = '';
+            canvasNavbarTitle.style.display = 'none';
+          } else {
+            canvasNavbarTitle.textContent = currentPage.navbarTitle || currentPage.name || '未命名页面';
+            canvasNavbarTitle.style.display = '';
+          }
         }
         // 子页面时显示返回按钮
         if (canvasNavbarBack) {
