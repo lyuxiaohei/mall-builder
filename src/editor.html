@@ -4136,8 +4136,8 @@
           defaultConfig: {
             // 图片配置
             slides: [
-              { image: '../assets/banner素材.jpg', link: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
-              { image: '../assets/banner素材2.jpg', link: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '../assets/banner素材.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '../assets/banner素材2.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
             ],
             // 图片样式
             height: 180,
@@ -5654,15 +5654,25 @@
               fileInputId: 'carousel-file-input-' + index,
               tip: ''
             });
-                generateJumpConfigHTML({
-                  jumpType: slide.jumpType || 'none',
-                  jumpTarget: slide.jumpTarget || '',
-                  typeSelectId: 'carousel-jump-type',
-                  targetInputId: 'carousel-jump-target',
-                  index: index,
-                  label: '跳转配置'
-                }) +
-              '</div>';
+
+            return '<div class="carousel-slide-row" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafafa;">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                '<span style="font-size:13px;font-weight:500;color:var(--text);">图片 ' + (index + 1) + '</span>' +
+                (slides.length > 1 ? '<button type="button" class="btn btn-danger btn-sm carousel-slide-remove" data-index="' + index + '" style="padding:2px 8px;">删除</button>' : '') +
+              '</div>' +
+              '<div style="margin-bottom:8px;">' +
+                '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">轮播图片</label>' +
+                imageSelectorHtml +
+              '</div>' +
+              generateJumpConfigHTML({
+                jumpType: slide.jumpType || 'none',
+                jumpTarget: slide.jumpTarget || '',
+                typeSelectId: 'carousel-jump-type',
+                targetInputId: 'carousel-jump-target',
+                index: index,
+                label: '跳转配置'
+              }) +
+            '</div>';
           }).join('');
 
           return '' +
