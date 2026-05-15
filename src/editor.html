@@ -5655,7 +5655,7 @@
               uploadBtnId: 'carousel-upload-btn-' + index,
               libraryBtnId: 'carousel-library-btn-' + index,
               fileInputId: 'carousel-file-input-' + index,
-              tip: '建议宽度750px，高度' + (height * 2) + 'px（' + height + 'px × 2倍图）'
+              tip: '建议尺寸：750 × 360px'
             });
 
             return '<div class="carousel-slide-row" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafafa;">' +
@@ -5680,16 +5680,6 @@
 
           return '' +
             '<div class="config-section">' +
-              '<div class="config-section-title">图片配置</div>' +
-              '<div class="config-grid">' +
-                '<div class="config-item" style="grid-column:1 / -1;">' +
-                  '<div id="carousel-slides-container">' + slidesRowsHtml + '</div>' +
-                  '<button type="button" class="btn btn-primary btn-sm" id="carousel-add-slide" style="margin-top:6px;">+ 添加图片</button>' +
-                  '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;">支持多张图片轮播；仅一张时不轮播。可粘贴图片URL或点击「选择文件」上传本地图。</p>' +
-                '</div>' +
-              '</div>' +
-            '</div>' +
-            '<div class="config-section">' +
               '<div class="config-section-title">风格设置</div>' +
               '<div class="config-grid">' +
                 '<div class="config-item">' +
@@ -5702,12 +5692,18 @@
               '</div>' +
             '</div>' +
             '<div class="config-section">' +
+              '<div class="config-section-title">图片配置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<div id="carousel-slides-container">' + slidesRowsHtml + '</div>' +
+                  '<button type="button" class="btn btn-primary btn-sm" id="carousel-add-slide" style="margin-top:6px;">+ 添加图片</button>' +
+                  '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;">支持多张图片轮播；仅一张时不轮播。可粘贴图片URL或点击「选择文件」上传本地图。</p>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
               '<div class="config-section-title">图片样式</div>' +
               '<div class="config-grid">' +
-                '<div class="config-item">' +
-                  '<label>图片高度(px)</label>' +
-                  '<input type="number" id="carousel-height" value="' + height + '" min="100" max="400" step="10" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
-                '</div>' +
                 '<div class="config-item">' +
                   '<label>图片边角</label>' +
                   '<select id="carousel-image-corner" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
@@ -8134,15 +8130,6 @@
           if (styleModeEl) {
             styleModeEl.addEventListener('change', function () {
               carouselConfig.styleMode = this.value;
-              renderCanvas();
-            });
-          }
-
-          // 图片高度
-          var heightEl = document.getElementById('carousel-height');
-          if (heightEl) {
-            heightEl.addEventListener('input', function () {
-              carouselConfig.height = Math.max(100, Math.min(400, parseInt(this.value, 10) || 180));
               renderCanvas();
             });
           }
