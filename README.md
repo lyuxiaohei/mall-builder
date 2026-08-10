@@ -19,8 +19,12 @@ npx http-server -p 8080
 ```
 
 然后在浏览器访问：
-- 主入口页面：http://localhost:8080/src/index.html
-- 编辑器页面：http://localhost:8080/src/editor.html
+- **原型总入口（推荐）**：http://localhost:8080/src/playground-index.html — 汇总所有页面类型编辑器与组件 playground 的导航页
+- 主入口页面（运营工作台）：http://localhost:8080/src/index.html
+- 完整编辑器（空画布）：http://localhost:8080/src/editor.html
+- 素材库（后台规范）：http://localhost:8080/src/material-library.html
+- 页面类型编辑器：http://localhost:8080/src/pages/home.html（另有 category / mine / product-detail / cart / custom）
+- 组件 playground：http://localhost:8080/src/components/carousel.html（每个组件类型一个，共 16 个）
 
 ### 方式三：VS Code Live Server
 1. 安装 VS Code 的 Live Server 扩展
@@ -60,43 +64,57 @@ npx http-server -p 8080
 | **分类展示** | 分类页面专属组件，展示分类导航和商品 |
 | **底部导航** | Tabbar导航，可配置显示/隐藏 |
 
+## 架构（重构后）
+
+原 `editor.html` 是 14,000+ 行的单体文件（内联 CSS + 内联 JS）。重构后拆为「**共享骨架 + 每个页面类型/组件类型各一个独立 html + 共享应用逻辑**」的多页面结构：
+
+- **通用骨架一致**：编辑器外壳（顶栏 / 左侧栏 / 画布手机框 / 右侧属性面板 / 6 个弹窗）抽成 `common/skeleton.js`，由 `editor-app.js` 启动时自动注入。所有编辑器页面共用同一套骨架，是代码级保证而非复制粘贴。
+- **每个页面类型一个 html**：`src/pages/{home,category,mine,product-detail,cart,custom}.html`，各为 ~22 行薄壳，通过 `window.__EDITOR_CONFIG__ = { mode:'page-editor', pageType }` 声明模式，复用骨架与逻辑，打开即预置对应页面。
+- **每个组件类型一个 html**：`src/components/<type>.html`（共 16 个），声明 `{ mode:'component-playground', componentType }`，打开即预置单个组件并选中，专注配置该组件。
+- **应用逻辑共享**：`common/editor-app.js`（原内联 IIFE 整体外置）+ `common/data/*.js`（Mock 数据）+ `common/namespace.js`（`window.MallBuilder` 命名空间）。用经典 `<script src>` 加载，保留 `file://` 双击打开，零构建工具。
+- **素材库**：`material-library.html` 按后台设计规范（`#1890ff` / Header 64 / Sider 200 / 5 列网格 / 分页 36px），接入 `styles.css` 共享 token。
+
 ## 目录结构
 
 ```
 mall-builder/
-├── src/                  # HTML 原型源码文件夹
-│   ├── index.html        # 主入口页面（运营工作台）
-│   ├── editor.html       # 编辑器页面（大型单文件应用）
-│   ├── material-library.html # 素材库页面
-│   ├── app.js            # 主入口页面逻辑
-│   ├── data.js           # Mock 数据文件
-│   └── styles.css        # 页面样式
-├── assets/               # 静态资源（图片素材）
-├── styles.css            # 全局样式文件
-├── app.js                # 主入口页面逻辑
-├── data.js               # Mock 数据文件
-├── docs/                 # 项目文档
-│   ├── 组件&配置项V1.4-20260401.md  # 最新组件配置文档
-│   ├── 组件&功能清单V2.0-20260331.md # 功能清单
-│   ├── 项目功能清单V1.0.md          # 项目功能说明
-│   └── 组件问题.md                   # 组件问题记录
-├── tests/                # 测试脚本和截图
-│   ├── test_jump_final.py           # 自动化测试脚本
-│   ├── screenshots/                 # 测试截图
-│   └── ...
-├── archive/              # 归档文件
-└── README.md             # 项目说明文档
+├── src/                       # 源码
+│   ├── index.html             # 运营工作台（模板管理）
+│   ├── editor.html            # 完整编辑器（19 行薄壳，骨架由 skeleton.js 注入）
+│   ├── material-library.html  # 素材库（后台规范）
+│   ├── playground-index.html  # 原型总入口（页面/组件导航画廊）
+│   ├── styles.css             # 全局样式 + :root 设计 token（权威源）
+│   ├── app.js / data.js       # 工作台专属逻辑与 Mock 数据
+│   ├── common/                # 共享层（所有编辑器页面复用）
+│   │   ├── admin-layout.css   # 编辑器外壳样式
+│   │   ├── skeleton.js        # 通用页面骨架（注入 chrome）
+│   │   ├── namespace.js       # window.MallBuilder 命名空间 + 组件注册表
+│   │   ├── editor-app.js      # 编辑器全部应用逻辑（原内联 IIFE）
+│   │   └── data/              # Mock 数据（taxonomy / material-library / goods）
+│   ├── pages/                 # 每个页面类型一个 html 编辑器（6 个）
+│   └── components/            # 每个组件类型一个 html playground（16 个）
+├── assets/                    # 静态资源（图片素材）
+├── docs/                      # 项目文档（PRD / 组件配置 / 功能清单）
+├── tests/                     # Playwright 脚本与截图
+├── archive/
+│   └── legacy-root-copies/    # Phase 0 归档的根目录陈旧副本
+└── README.md
 ```
 
 ## 文件说明
 
 | 文件 | 说明 |
 |------|------|
-| `src/index.html` | 运营工作台主入口页面，包含模板列表、商城列表、推送记录等功能 |
-| `src/editor.html` | 模板编辑器页面，包含组件库、画布、属性面板，支持多种页面类型编辑 |
-| `styles.css` | 全局与组件样式，被两个HTML文件引用 |
-| `data.js` | Mock 数据（模板、品牌、推送记录、商城列表、商品数据等） |
-| `app.js` | 主入口页面逻辑（页面切换、列表渲染、弹窗与按钮逻辑） |
+| `src/playground-index.html` | 原型总入口，导航到各页面编辑器与组件 playground |
+| `src/index.html` | 运营工作台（模板列表、商城列表、推送记录） |
+| `src/editor.html` | 完整编辑器（19 行薄壳，外壳由 `common/skeleton.js` 注入） |
+| `src/common/skeleton.js` | 通用编辑器骨架（顶栏/左侧栏/画布/属性面板/弹窗），所有编辑器页面共享 |
+| `src/common/editor-app.js` | 编辑器全部应用逻辑（原内联 IIFE，含 `__EDITOR_CONFIG__` 钩子） |
+| `src/pages/*.html` | 每个页面类型一个 html（home/category/mine/product-detail/cart/custom） |
+| `src/components/*.html` | 每个组件类型一个 html playground（16 个） |
+| `src/styles.css` | 全局样式 + `:root` 设计 token（权威源，所有页面引用） |
+| `src/common/data/*.js` | Mock 数据（品牌/标签/分类/商品/素材库） |
+| `src/app.js` / `src/data.js` | 工作台（index.html）专属逻辑与 Mock 数据 |
 
 ## 商品数据来源配置
 
