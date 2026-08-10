@@ -1,0 +1,11365 @@
+/* editor-app.js — 模板编辑器全部应用逻辑。
+ * 从 src/editor.html 内联 <script> 整体外置(Phase 2), 内容逐字节保留,
+ * 仍为单一 IIFE。依赖 common/namespace.js + common/data/*.js 先于本文件加载
+ * (内部用 const 别名引用 MallBuilder.data.*)。
+ * 后续 Phase 3 将逐步把组件逻辑拆到 common/components/*.js。 */
+    (function () {
+      const params = new URLSearchParams(window.location.search);
+      const name = params.get('name') || '未命名模板';
+      document.getElementById('editor-title').textContent = name;
+      const editorPageTitle = document.getElementById('editor-page-title');
+      const btnBackToList = document.getElementById('btn-back-to-list');
+      const canvasNavbarTitle = document.getElementById('canvas-navbar-title');
+      const canvasNavbarBack = document.getElementById('canvas-navbar-back');
+      const sideTitle = document.getElementById('editor-side-title');
+      const sideDesc = document.getElementById('editor-side-desc');
+      const sideList = document.getElementById('editor-side-list');
+      const floorListEl = document.getElementById('canvas-floor-list');
+      const placeholderEl = document.getElementById('canvas-placeholder');
+      const dropZoneEl = document.getElementById('canvas-drop-zone');
+      const emptyTipEl = document.getElementById('canvas-empty-tip');
+      const emptyTipTitle = document.getElementById('empty-tip-title');
+      const emptyTipDesc = document.getElementById('empty-tip-desc');
+      const emptyTipBtn = document.getElementById('empty-tip-btn');
+      const propsPageTitleInput = document.getElementById('props-page-title-input');
+      const propsCurrentFloor = document.getElementById('props-current-floor');
+      const propsComponentPanel = document.getElementById('props-component-panel');
+      const propsComponentTitle = document.getElementById('props-component-title');
+      const phoneShell = document.getElementById('editor-phone-shell');
+      const canvasSideActions = document.getElementById('canvas-side-actions');
+      const btnCanvasUp = document.getElementById('btn-canvas-up');
+      const btnCanvasDown = document.getElementById('btn-canvas-down');
+      const btnCanvasCopy = document.getElementById('btn-canvas-copy');
+      const btnCanvasDelete = document.getElementById('btn-canvas-delete');
+      const pageLayoutSideActions = document.getElementById('page-layout-side-actions');
+      const btnLayoutUp = document.getElementById('btn-layout-up');
+      const btnLayoutDown = document.getElementById('btn-layout-down');
+      const btnLayoutCopy = document.getElementById('btn-layout-copy');
+      const btnLayoutDelete = document.getElementById('btn-layout-delete');
+      const btnAddPage = document.getElementById('btn-add-page');
+      const canvasTabbar = document.getElementById('canvas-tabbar');
+      const btnAddTab = document.getElementById('btn-add-tab');
+      const btnRemoveTab = document.getElementById('btn-remove-tab');
+      const tabbarCount = document.getElementById('tabbar-count');
+      const tabConfigList = document.getElementById('tab-config-list');
+      const tabbarDefaultColorInput = document.getElementById('tabbar-default-color');
+      const tabbarActiveColorInput = document.getElementById('tabbar-active-color');
+      const tabbarFontSizeInput = document.getElementById('tabbar-font-size');
+      const tabbarShowTextInput = document.getElementById('tabbar-show-text');
+      const tabbarBgColorInput = document.getElementById('tabbar-bg-color');
+      const tabbarHeightInput = document.getElementById('tabbar-height');
+      const tabbarBorderColorInput = document.getElementById('tabbar-border-color');
+      const tabbarIconGapInput = document.getElementById('tabbar-icon-gap');
+
+      // ===== 素材库数据结构和状态 =====
+      // 素材库图片分类
+      const IMAGE_CATEGORIES = MallBuilder.data.IMAGE_CATEGORIES;
+      let MATERIAL_LIBRARY = MallBuilder.data.MATERIAL_LIBRARY;
+      let imagePickerState = MallBuilder.data.imagePickerState;
+
+      // 获取分类下的图片数量
+      function getCategoryImageCount(categoryId) {
+        if (categoryId === 'all') {
+          return MATERIAL_LIBRARY.images.length;
+        }
+        return MATERIAL_LIBRARY.images.filter(function(img) { return img.categoryId === categoryId; }).length;
+      }
+
+      // 获取分类下的图片列表（支持搜索和分页）
+      function getCategoryImages(categoryId, keyword, page, pageSize) {
+        var images = MATERIAL_LIBRARY.images;
+
+        // 按分类筛选
+        if (categoryId && categoryId !== 'all') {
+          images = images.filter(function(img) { return img.categoryId === categoryId; });
+        }
+
+        // 按关键词搜索
+        if (keyword && keyword.trim()) {
+          var kw = keyword.trim().toLowerCase();
+          images = images.filter(function(img) {
+            return img.name.toLowerCase().indexOf(kw) !== -1;
+          });
+        }
+
+        // 按创建时间倒序排序
+        images = images.slice().sort(function(a, b) { return b.createTime - a.createTime; });
+
+        // 分页
+        var total = images.length;
+        var totalPages = Math.ceil(total / pageSize);
+        var start = (page - 1) * pageSize;
+        var end = start + pageSize;
+
+        return {
+          list: images.slice(start, end),
+          total: total,
+          totalPages: totalPages,
+          currentPage: page
+        };
+      }
+
+      // 添加图片到素材库
+      function addImageToLibrary(imageData, categoryName) {
+        var categoryId = categoryName || 'default';
+        var newImage = {
+          id: 'img-' + MATERIAL_LIBRARY.nextId++,
+          name: imageData.name || '未命名图片',
+          url: imageData.url,
+          categoryId: categoryId,
+          createTime: Date.now()
+        };
+        MATERIAL_LIBRARY.images.push(newImage);
+        return newImage;
+      }
+
+      // 渲染素材库分类树
+      function renderImageCategoryTree() {
+        var container = document.getElementById('image-picker-category-tree');
+        if (!container) return;
+
+        var html = '';
+
+        // "全部分类"选项
+        html += '<div class="image-category-item' + (imagePickerState.currentCategory === 'all' ? ' active' : '') + '" data-category="all">' +
+          '<span class="category-icon">📂</span>' +
+          '<span>全部分类</span>' +
+          '<span class="category-count">' + MATERIAL_LIBRARY.images.length + '</span>' +
+        '</div>';
+
+        // 各分类
+        IMAGE_CATEGORIES.forEach(function(cat) {
+          var count = getCategoryImageCount(cat.id);
+          html += '<div class="image-category-item' + (imagePickerState.currentCategory === cat.id ? ' active' : '') + '" data-category="' + cat.id + '">' +
+            '<span class="category-icon">' + cat.icon + '</span>' +
+            '<span>' + cat.name + '</span>' +
+            '<span class="category-count">' + count + '</span>' +
+          '</div>';
+        });
+
+        container.innerHTML = html;
+
+        // 绑定分类点击事件
+        container.querySelectorAll('.image-category-item').forEach(function(item) {
+          item.addEventListener('click', function() {
+            imagePickerState.currentCategory = this.dataset.category;
+            imagePickerState.currentPage = 1;
+            renderImageCategoryTree();
+            renderImagePickerList();
+          });
+        });
+      }
+
+      // 渲染素材库图片列表
+      function renderImagePickerList() {
+        var container = document.getElementById('image-picker-list');
+        if (!container) return;
+
+        var result = getCategoryImages(
+          imagePickerState.currentCategory,
+          imagePickerState.searchKeyword,
+          imagePickerState.currentPage,
+          imagePickerState.pageSize
+        );
+
+        if (result.list.length === 0) {
+          container.innerHTML = '<div class="image-picker-empty">' +
+            '<div class="image-picker-empty-icon">🖼️</div>' +
+            '<div class="image-picker-empty-text">' + (imagePickerState.searchKeyword ? '未找到匹配的图片' : '暂无图片，请先上传') + '</div>' +
+          '</div>';
+          renderImagePickerPagination(0, 0);
+          return;
+        }
+
+        var html = '';
+        result.list.forEach(function(img) {
+          var isSelected = imagePickerState.selectedImages.some(function(sel) { return sel.id === img.id; });
+          html += '<div class="image-picker-item' + (isSelected ? ' selected' : '') + '" data-id="' + img.id + '">' +
+            '<div class="item-preview"><img src="' + img.url + '" alt="' + img.name + '" onerror="this.src=\'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iI2Y1ZjVmNSIvPjx0ZXh0IHg9IjUwIiB5PSI1MCIgZm9udC1zaXplPSIxMiIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPuaVtOaYrjwvdGV4dD48L3N2Zz4=\'' + '" /></div>' +
+            '<div class="item-info"><div class="item-name" title="' + img.name + '">' + img.name + '</div></div>' +
+          '</div>';
+        });
+
+        container.innerHTML = html;
+
+        // 绑定图片点击事件
+        container.querySelectorAll('.image-picker-item').forEach(function(item) {
+          item.addEventListener('click', function() {
+            var imgId = this.dataset.id;
+            var img = MATERIAL_LIBRARY.images.find(function(i) { return i.id === imgId; });
+            if (!img) return;
+
+            if (imagePickerState.multiSelect) {
+              // 多选模式
+              var idx = imagePickerState.selectedImages.findIndex(function(sel) { return sel.id === imgId; });
+              if (idx >= 0) {
+                imagePickerState.selectedImages.splice(idx, 1);
+              } else {
+                imagePickerState.selectedImages.push(img);
+              }
+              renderImagePickerList();
+              updateImagePickerSelectedInfo();
+            } else {
+              // 单选模式：直接选中并确认
+              imagePickerState.selectedImages = [img];
+              confirmImagePicker();
+            }
+          });
+        });
+
+        renderImagePickerPagination(result.totalPages, result.currentPage);
+      }
+
+      // 渲染分页
+      function renderImagePickerPagination(totalPages, currentPage) {
+        var container = document.getElementById('image-picker-pagination');
+        if (!container) return;
+
+        if (totalPages <= 1) {
+          container.innerHTML = '<span class="page-info">共 ' + (totalPages === 0 ? 0 : imagePickerState.searchKeyword ? getCategoryImages(imagePickerState.currentCategory, imagePickerState.searchKeyword, 1, 9999).total : getCategoryImageCount(imagePickerState.currentCategory === 'all' ? null : imagePickerState.currentCategory)) + ' 张</span>';
+          return;
+        }
+
+        var html = '';
+        html += '<button type="button" class="page-btn" data-page="prev"' + (currentPage <= 1 ? ' disabled' : '') + '>‹</button>';
+
+        // 显示页码
+        var startPage = Math.max(1, currentPage - 2);
+        var endPage = Math.min(totalPages, startPage + 4);
+
+        for (var i = startPage; i <= endPage; i++) {
+          html += '<button type="button" class="page-btn' + (i === currentPage ? ' active' : '') + '" data-page="' + i + '">' + i + '</button>';
+        }
+
+        html += '<button type="button" class="page-btn" data-page="next"' + (currentPage >= totalPages ? ' disabled' : '') + '>›</button>';
+        html += '<span class="page-info">共 ' + totalPages + ' 页</span>';
+
+        container.innerHTML = html;
+
+        // 绑定分页事件
+        container.querySelectorAll('.page-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            if (this.disabled) return;
+            var page = this.dataset.page;
+            if (page === 'prev') {
+              imagePickerState.currentPage = Math.max(1, currentPage - 1);
+            } else if (page === 'next') {
+              imagePickerState.currentPage = Math.min(totalPages, currentPage + 1);
+            } else {
+              imagePickerState.currentPage = parseInt(page, 10);
+            }
+            renderImagePickerList();
+          });
+        });
+      }
+
+      // 更新已选择图片数量提示
+      function updateImagePickerSelectedInfo() {
+        var el = document.getElementById('image-picker-selected-info');
+        var confirmBtn = document.getElementById('btn-image-picker-confirm');
+        if (el) {
+          el.innerHTML = '已选择：<span>' + imagePickerState.selectedImages.length + '</span> 张图片';
+        }
+        if (confirmBtn) {
+          confirmBtn.disabled = imagePickerState.selectedImages.length === 0;
+        }
+      }
+
+      // 打开素材库选择弹窗
+      function openImagePickerModal(callback, multiSelect) {
+        var modal = document.getElementById('modal-image-picker');
+        if (!modal) return;
+
+        // 重置状态
+        imagePickerState = {
+          isOpen: true,
+          selectedImages: [],
+          currentCategory: 'all',
+          searchKeyword: '',
+          currentPage: 1,
+          pageSize: 15,
+          onSelectCallback: callback,
+          multiSelect: multiSelect || false
+        };
+
+        // 清空搜索框
+        var searchInput = document.getElementById('image-picker-search-input');
+        if (searchInput) searchInput.value = '';
+
+        // 渲染内容
+        renderImageCategoryTree();
+        renderImagePickerList();
+        updateImagePickerSelectedInfo();
+
+        // 显示弹窗
+        modal.classList.add('show');
+      }
+
+      // 关闭素材库选择弹窗
+      function closeImagePickerModal() {
+        var modal = document.getElementById('modal-image-picker');
+        if (modal) {
+          modal.classList.remove('show');
+        }
+        imagePickerState.isOpen = false;
+        imagePickerState.onSelectCallback = null;
+      }
+
+      // 确认选择
+      function confirmImagePicker() {
+        if (imagePickerState.onSelectCallback) {
+          if (imagePickerState.multiSelect) {
+            imagePickerState.onSelectCallback(imagePickerState.selectedImages);
+          } else {
+            imagePickerState.onSelectCallback(imagePickerState.selectedImages[0] || null);
+          }
+        }
+        closeImagePickerModal();
+      }
+
+      // 本地上传图片（上传成功后自动添加到素材库默认分类）
+      function uploadLocalImage(file, callback) {
+        if (!file || !file.type.startsWith('image/')) {
+          alert('请选择有效的图片文件');
+          return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var imageUrl = e.target.result;
+          // 生成文件名
+          var fileName = file.name.replace(/\.[^/.]+$/, ''); // 移除扩展名
+          // 添加到素材库默认分类
+          var newImage = addImageToLibrary({
+            name: fileName,
+            url: imageUrl
+          }, 'default');
+
+          // 提示上传成功
+          console.log('图片已上传并添加到素材库默认分类:', newImage.name);
+
+          // 执行回调
+          if (callback) {
+            callback(newImage);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+
+      // 生成通用图片选择组件HTML
+      function generateImageSelectorHTML(options) {
+        var config = {
+          imageUrl: options.imageUrl || '',
+          previewId: options.previewId || 'image-preview',
+          uploadBtnId: options.uploadBtnId || 'upload-btn',
+          libraryBtnId: options.libraryBtnId || 'library-btn',
+          fileInputId: options.fileInputId || 'file-input',
+          tip: options.tip || ''
+        };
+
+        var previewHtml = '';
+        if (config.imageUrl) {
+          previewHtml = '<img src="' + config.imageUrl + '" alt="预览" />';
+        } else {
+          previewHtml = '<div class="image-selector-preview-empty"><span class="empty-icon">🖼️</span><span class="empty-text">暂无图片</span></div>';
+        }
+
+        var html = '<div class="image-selector-container">' +
+          '<div class="image-selector-preview" id="' + config.previewId + '">' + previewHtml + '</div>' +
+          '<div class="image-selector-buttons">' +
+            '<label class="image-selector-btn" for="' + config.fileInputId + '" style="cursor:pointer;flex:1;">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>' +
+              ' 本地上传' +
+              '<input type="file" id="' + config.fileInputId + '" accept="image/*" style="display:none;" />' +
+            '</label>' +
+            '<button type="button" class="image-selector-btn primary" id="' + config.libraryBtnId + '" style="flex:1;">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>' +
+              ' 素材库' +
+            '</button>' +
+          '</div>';
+
+        if (config.tip) {
+          html += '<div class="image-selector-tip">' + config.tip + '</div>';
+        }
+
+        html += '</div>';
+
+        return html;
+      }
+
+      // 根据ID查找分类名称
+      function getCategoryNameById(categoryId) {
+        for (var i = 0; i < categoryData.length; i++) {
+          var l1 = categoryData[i];
+          if (l1.id === categoryId) return l1.name;
+          if (l1.children) {
+            for (var j = 0; j < l1.children.length; j++) {
+              var l2 = l1.children[j];
+              if (l2.id === categoryId) return l1.name + ' / ' + l2.name;
+              if (l2.children) {
+                for (var k = 0; k < l2.children.length; k++) {
+                  var l3 = l2.children[k];
+                  if (l3.id === categoryId) return l1.name + ' / ' + l2.name + ' / ' + l3.name;
+                }
+              }
+            }
+          }
+        }
+        return '';
+      }
+
+      // 根据ID查找品牌名称
+      function getBrandNameById(brandId) {
+        var brand = brandData.find(function(b) { return b.id === brandId; });
+        return brand ? brand.name : '';
+      }
+
+      // 根据ID查找标签名称
+      function getTagNameById(tagId) {
+        for (var i = 0; i < tagData.length; i++) {
+          var group = tagData[i];
+          if (group.children) {
+            var tag = group.children.find(function(t) { return t.id === tagId; });
+            if (tag) return group.name + ' / ' + tag.name;
+          }
+        }
+        return '';
+      }
+
+      // 生成三级分类下拉HTML
+      function generateCategoryDropdownHTML(targetInputId, index, selectedValue) {
+        var selectedName = selectedValue ? getCategoryNameById(selectedValue) : '';
+        var displayValue = selectedName || '';
+
+        var listHtml = categoryData.map(function(l1) {
+          var l2Html = l1.children ? l1.children.map(function(l2) {
+            var l3Html = l2.children ? l2.children.map(function(l3) {
+              var isSelected = selectedValue === l3.id;
+              return '<div class="searchable-dropdown-cat-level3' + (isSelected ? ' selected' : '') + '" data-value="' + l3.id + '" data-name="' + l1.name + ' / ' + l2.name + ' / ' + l3.name + '">' + l3.name + '</div>';
+            }).join('') : '';
+
+            return '<div class="searchable-dropdown-cat-level2" data-l2-id="' + l2.id + '">' +
+              '<span>' + l2.name + '</span>' +
+              '<span class="searchable-dropdown-cat-level2-arrow">▼</span>' +
+            '</div>' +
+            '<div class="searchable-dropdown-cat-level3-wrap">' + l3Html + '</div>';
+          }).join('') : '';
+
+          return '<div class="searchable-dropdown-cat-level1" data-l1-id="' + l1.id + '">' +
+            '<span>' + l1.name + '</span>' +
+            '<span class="searchable-dropdown-cat-level1-arrow">▼</span>' +
+          '</div>' +
+          '<div class="searchable-dropdown-cat-level2-wrap">' + l2Html + '</div>';
+        }).join('');
+
+        return '<div class="searchable-dropdown ' + targetInputId + '-dropdown" data-index="' + index + '">' +
+          '<input type="text" class="searchable-dropdown-input ' + targetInputId + '-display" data-index="' + index + '" value="' + displayValue + '" placeholder="请选择分类" readonly />' +
+          '<span class="searchable-dropdown-arrow">▼</span>' +
+          '<div class="searchable-dropdown-panel">' +
+            '<div class="searchable-dropdown-search"><input type="text" class="' + targetInputId + '-search" data-index="' + index + '" placeholder="搜索分类..." /></div>' +
+            '<div class="searchable-dropdown-list ' + targetInputId + '-list" data-index="' + index + '">' + listHtml + '</div>' +
+          '</div>' +
+          '<input type="hidden" class="' + targetInputId + '" data-index="' + index + '" value="' + (selectedValue || '') + '" />' +
+        '</div>';
+      }
+
+      // 生成品牌下拉HTML
+      function generateBrandDropdownHTML(targetInputId, index, selectedValue) {
+        var selectedName = selectedValue ? getBrandNameById(selectedValue) : '';
+        var displayValue = selectedName || '';
+
+        var listHtml = brandData.map(function(brand) {
+          var isSelected = selectedValue === brand.id;
+          return '<div class="searchable-dropdown-item' + (isSelected ? ' selected' : '') + '" data-value="' + brand.id + '" data-name="' + brand.name + '">' + brand.name + '</div>';
+        }).join('');
+
+        return '<div class="searchable-dropdown ' + targetInputId + '-dropdown" data-index="' + index + '">' +
+          '<input type="text" class="searchable-dropdown-input ' + targetInputId + '-display" data-index="' + index + '" value="' + displayValue + '" placeholder="请选择品牌" readonly />' +
+          '<span class="searchable-dropdown-arrow">▼</span>' +
+          '<div class="searchable-dropdown-panel">' +
+            '<div class="searchable-dropdown-search"><input type="text" class="' + targetInputId + '-search" data-index="' + index + '" placeholder="搜索品牌..." /></div>' +
+            '<div class="searchable-dropdown-list ' + targetInputId + '-list" data-index="' + index + '">' + listHtml + '</div>' +
+          '</div>' +
+          '<input type="hidden" class="' + targetInputId + '" data-index="' + index + '" value="' + (selectedValue || '') + '" />' +
+        '</div>';
+      }
+
+      // 生成二级标签下拉HTML
+      function generateTagDropdownHTML(targetInputId, index, selectedValue) {
+        var selectedName = selectedValue ? getTagNameById(selectedValue) : '';
+        var displayValue = selectedName || '';
+
+        var listHtml = tagData.map(function(group) {
+          var itemsHtml = group.children ? group.children.map(function(tag) {
+            var isSelected = selectedValue === tag.id;
+            return '<div class="searchable-dropdown-level2-item' + (isSelected ? ' selected' : '') + '" data-value="' + tag.id + '" data-name="' + group.name + ' / ' + tag.name + '">' + tag.name + '</div>';
+          }).join('') : '';
+
+          return '<div class="searchable-dropdown-level1" data-group-id="' + group.id + '">' +
+            '<span>' + group.name + '</span>' +
+            '<span class="searchable-dropdown-level1-arrow">▼</span>' +
+          '</div>' +
+          '<div class="searchable-dropdown-level2">' + itemsHtml + '</div>';
+        }).join('');
+
+        return '<div class="searchable-dropdown ' + targetInputId + '-dropdown" data-index="' + index + '">' +
+          '<input type="text" class="searchable-dropdown-input ' + targetInputId + '-display" data-index="' + index + '" value="' + displayValue + '" placeholder="请选择标签" readonly />' +
+          '<span class="searchable-dropdown-arrow">▼</span>' +
+          '<div class="searchable-dropdown-panel">' +
+            '<div class="searchable-dropdown-search"><input type="text" class="' + targetInputId + '-search" data-index="' + index + '" placeholder="搜索标签..." /></div>' +
+            '<div class="searchable-dropdown-list ' + targetInputId + '-list" data-index="' + index + '">' + listHtml + '</div>' +
+          '</div>' +
+          '<input type="hidden" class="' + targetInputId + '" data-index="' + index + '" value="' + (selectedValue || '') + '" />' +
+        '</div>';
+      }
+
+      // 生成跳转配置HTML（标准化跳转类型）
+      function generateJumpConfigHTML(options) {
+        var config = {
+          jumpType: options.jumpType || 'none',
+          jumpTarget: options.jumpTarget || '',
+          typeSelectId: options.typeSelectId || 'jump-type',
+          targetInputId: options.targetInputId || 'jump-target',
+          index: options.index || 0,
+          label: options.label || '跳转配置',
+          excludeTypes: options.excludeTypes || []
+        };
+
+        // 获取页面列表用于内部页面选择
+        var mainPages = pageStore.filter(function(p) { return p.pageType === 'main'; });
+        var subPages = pageStore.filter(function(p) { return p.pageType === 'sub'; });
+
+        // 根据跳转类型生成目标输入区域
+        var targetHtml = '';
+        if (config.jumpType === 'internal-page') {
+          targetHtml = '<select class="' + config.targetInputId + '" data-index="' + config.index + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;">' +
+            '<optgroup label="主页面">' +
+              mainPages.map(function(p) { return '<option value="' + p.id + '" ' + (config.jumpTarget === p.id ? 'selected' : '') + '>' + p.name + '</option>'; }).join('') +
+            '</optgroup>' +
+            (subPages.length ? '<optgroup label="子页面">' +
+              subPages.map(function(p) { return '<option value="' + p.id + '" ' + (config.jumpTarget === p.id ? 'selected' : '') + '>' + p.name + '</option>'; }).join('') +
+            '</optgroup>' : '') +
+          '</select>';
+        } else if (config.jumpType === 'external') {
+          targetHtml = '<input type="text" class="' + config.targetInputId + '" data-index="' + config.index + '" value="' + config.jumpTarget + '" placeholder="输入外部链接URL" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />';
+        } else if (config.jumpType === 'category') {
+          targetHtml = generateCategoryDropdownHTML(config.targetInputId, config.index, config.jumpTarget);
+        } else if (config.jumpType === 'brand') {
+          targetHtml = generateBrandDropdownHTML(config.targetInputId, config.index, config.jumpTarget);
+        } else if (config.jumpType === 'tag') {
+          targetHtml = generateTagDropdownHTML(config.targetInputId, config.index, config.jumpTarget);
+        } else if (config.jumpType === 'product') {
+          // 获取商品名称
+          var productName = '';
+          if (config.jumpTarget) {
+            var product = MOCK_GOODS_DATA.find(function(g) { return g.id === config.jumpTarget; });
+            if (product) productName = product.name;
+          }
+          targetHtml = '<div class="product-select-wrapper" style="position:relative;">' +
+            '<input type="text" class="' + config.targetInputId + '-display" data-index="' + config.index + '" value="' + productName + '" placeholder="点击选择商品" readonly style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 30px 0 12px;font-size:13px;cursor:pointer;background:#fff;" />' +
+            '<span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);color:#bfbfbf;font-size:12px;">▼</span>' +
+            '<input type="hidden" class="' + config.targetInputId + '" data-index="' + config.index + '" value="' + config.jumpTarget + '" />' +
+          '</div>';
+        } else {
+          targetHtml = '<input type="text" class="' + config.targetInputId + '" data-index="' + config.index + '" value="' + config.jumpTarget + '" disabled placeholder="请先选择跳转类型" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;color:#999;background:#f5f5f5;" />';
+        }
+
+        var html = '<div class="jump-config-container" style="margin-top:8px;">' +
+          '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">' + config.label + '</label>' +
+          '<div style="display:flex;gap:8px;">' +
+            '<div style="flex:1;">' +
+              '<select class="' + config.typeSelectId + '" data-index="' + config.index + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;">' +
+                '<option value="none" ' + (config.jumpType === 'none' ? 'selected' : '') + '>不跳转</option>' +
+                '<option value="internal-page" ' + (config.jumpType === 'internal-page' ? 'selected' : '') + '>内部页面</option>' +
+                (config.excludeTypes.indexOf('category') === -1 ? '<option value="category" ' + (config.jumpType === 'category' ? 'selected' : '') + '>分类</option>' : '') +
+                (config.excludeTypes.indexOf('brand') === -1 ? '<option value="brand" ' + (config.jumpType === 'brand' ? 'selected' : '') + '>品牌</option>' : '') +
+                (config.excludeTypes.indexOf('tag') === -1 ? '<option value="tag" ' + (config.jumpType === 'tag' ? 'selected' : '') + '>标签</option>' : '') +
+                (config.excludeTypes.indexOf('product') === -1 ? '<option value="product" ' + (config.jumpType === 'product' ? 'selected' : '') + '>单商品详情页</option>' : '') +
+                '<option value="external" ' + (config.jumpType === 'external' ? 'selected' : '') + '>外部链接</option>' +
+              '</select>' +
+            '</div>' +
+            '<div style="flex:2;">' +
+              '<div class="jump-target-wrapper" id="jump-target-wrapper-' + config.index + '">' + targetHtml + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+
+        return html;
+      }
+
+      // 绑定可搜索下拉框事件
+      function bindSearchableDropdownEvents(container, targetInputId, onChange) {
+        // 点击打开/关闭下拉
+        container.querySelectorAll('.' + targetInputId + '-dropdown').forEach(function(dropdown) {
+          var inputEl = dropdown.querySelector('.' + targetInputId + '-display');
+          var panelEl = dropdown.querySelector('.searchable-dropdown-panel');
+
+          inputEl.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // 关闭其他下拉
+            document.querySelectorAll('.searchable-dropdown.open').forEach(function(d) {
+              if (d !== dropdown) d.classList.remove('open');
+            });
+            dropdown.classList.toggle('open');
+            if (dropdown.classList.contains('open')) {
+              dropdown.querySelector('.' + targetInputId + '-search').focus();
+            }
+          });
+        });
+
+        // 搜索过滤
+        container.querySelectorAll('.' + targetInputId + '-search').forEach(function(searchInput) {
+          searchInput.addEventListener('input', function() {
+            var keyword = this.value.toLowerCase();
+            var listEl = container.querySelector('.' + targetInputId + '-list[data-index="' + this.dataset.index + '"]');
+            if (!listEl) return;
+
+            // 搜索所有可选项
+            listEl.querySelectorAll('[data-name]').forEach(function(item) {
+              var name = (item.dataset.name || '').toLowerCase();
+              item.style.display = name.indexOf(keyword) >= 0 ? '' : 'none';
+            });
+          });
+        });
+
+        // 选择项
+        container.querySelectorAll('.' + targetInputId + '-list [data-value]').forEach(function(item) {
+          item.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var idx = this.closest('.searchable-dropdown-list').dataset.index;
+            var dropdown = this.closest('.searchable-dropdown');
+            var hiddenInput = dropdown.querySelector('.' + targetInputId);
+            var displayInput = dropdown.querySelector('.' + targetInputId + '-display');
+
+            hiddenInput.value = this.dataset.value;
+            displayInput.value = this.dataset.name;
+
+            // 更新选中状态
+            dropdown.querySelectorAll('[data-value]').forEach(function(i) { i.classList.remove('selected'); });
+            this.classList.add('selected');
+
+            dropdown.classList.remove('open');
+
+            if (onChange) onChange(idx, this.dataset.value);
+          });
+        });
+
+        // 分类下拉的层级展开
+        container.querySelectorAll('.searchable-dropdown-cat-level1').forEach(function(l1) {
+          l1.addEventListener('click', function(e) {
+            e.stopPropagation();
+            this.classList.toggle('expanded');
+          });
+        });
+
+        container.querySelectorAll('.searchable-dropdown-cat-level2').forEach(function(l2) {
+          l2.addEventListener('click', function(e) {
+            e.stopPropagation();
+            this.classList.toggle('expanded');
+          });
+        });
+
+        // 标签下拉的层级展开
+        container.querySelectorAll('.searchable-dropdown-level1').forEach(function(l1) {
+          l1.addEventListener('click', function(e) {
+            e.stopPropagation();
+            this.classList.toggle('expanded');
+          });
+        });
+
+        // 点击外部关闭
+        document.addEventListener('click', function(e) {
+          if (!e.target.closest('.searchable-dropdown')) {
+            document.querySelectorAll('.searchable-dropdown.open').forEach(function(d) {
+              d.classList.remove('open');
+            });
+          }
+        });
+      }
+
+      // 绑定商品选择事件（点击输入框打开选择弹窗）
+      // 注意：只绑定 .product-select-wrapper 内的输入框，避免与 .searchable-dropdown 冲突
+      function bindProductSelectEvents(container, targetInputId, onChange) {
+        // 只选择 .product-select-wrapper 内的 display 输入框，排除 .searchable-dropdown 内的
+        container.querySelectorAll('.product-select-wrapper .' + targetInputId + '-display').forEach(function(inputEl) {
+          inputEl.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var idx = this.dataset.index;
+            var hiddenInput = this.parentElement.querySelector('.' + targetInputId);
+            var currentValue = hiddenInput ? hiddenInput.value : '';
+
+            openSingleProductModal(currentValue, function(productId, productName) {
+              // 更新显示值
+              inputEl.value = productName || '';
+              if (hiddenInput) hiddenInput.value = productId || '';
+
+              if (onChange) onChange(idx, productId);
+            });
+          });
+        });
+      }
+
+      // 更新图片选择器预览
+      function updateImageSelectorPreview(previewId, imageUrl) {
+        var preview = document.getElementById(previewId);
+        if (!preview) return;
+
+        if (imageUrl) {
+          preview.innerHTML = '<img src="' + imageUrl + '" alt="预览" />';
+        } else {
+          preview.innerHTML = '<div class="image-selector-preview-empty"><span class="empty-icon">🖼️</span><span class="empty-text">暂无图片</span></div>';
+        }
+      }
+
+      // 绑定图片选择器事件
+      function bindImageSelectorEvents(options) {
+        var config = {
+          fileInputId: options.fileInputId || 'file-input',
+          libraryBtnId: options.libraryBtnId || 'library-btn',
+          previewId: options.previewId || 'image-preview',
+          onImageSelected: options.onImageSelected || function() {}
+        };
+
+        // 本地上传
+        var fileInput = document.getElementById(config.fileInputId);
+        if (fileInput) {
+          fileInput.addEventListener('change', function() {
+            var file = this.files && this.files[0];
+            if (!file) return;
+
+            uploadLocalImage(file, function(newImage) {
+              // 更新预览
+              updateImageSelectorPreview(config.previewId, newImage.url);
+              // 回调
+              config.onImageSelected(newImage.url);
+            });
+
+            // 清空以允许再次选择同一文件
+            this.value = '';
+          });
+        }
+
+        // 从素材库选择
+        var libraryBtn = document.getElementById(config.libraryBtnId);
+        if (libraryBtn) {
+          libraryBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openImagePickerModal(function(selectedImage) {
+              if (selectedImage) {
+                // 更新预览
+                updateImageSelectorPreview(config.previewId, selectedImage.url);
+                // 回调
+                config.onImageSelected(selectedImage.url);
+              }
+            }, false);
+          });
+        }
+      }
+
+      // 单商品选择弹窗状态
+      var singleProductModalState = {
+        currentPage: 1,
+        pageSize: 12,
+        searchKeyword: '',
+        selectedProductId: null,
+        selectedProductName: '',
+        onSelect: null
+      };
+
+      // 打开单商品选择弹窗
+      function openSingleProductModal(selectedProductId, onSelect) {
+        singleProductModalState.selectedProductId = selectedProductId || null;
+        singleProductModalState.selectedProductName = '';
+        singleProductModalState.currentPage = 1;
+        singleProductModalState.searchKeyword = '';
+        singleProductModalState.onSelect = onSelect;
+
+        // 获取已选商品名称
+        if (selectedProductId) {
+          var product = MOCK_GOODS_DATA.find(function(g) { return g.id === selectedProductId; });
+          if (product) singleProductModalState.selectedProductName = product.name;
+        }
+
+        document.getElementById('single-product-search-input').value = '';
+        renderSingleProductList();
+        updateSingleProductFooter();
+        document.getElementById('modal-single-product').classList.add('show');
+      }
+
+      // 关闭单商品选择弹窗
+      function closeSingleProductModal() {
+        document.getElementById('modal-single-product').classList.remove('show');
+        singleProductModalState.onSelect = null;
+      }
+
+      // 渲染单商品列表
+      function renderSingleProductList() {
+        var listEl = document.getElementById('single-product-list');
+        var keyword = singleProductModalState.searchKeyword.toLowerCase();
+
+        // 过滤商品
+        var filteredGoods = MOCK_GOODS_DATA.filter(function(goods) {
+          if (!keyword) return true;
+          return goods.name.toLowerCase().indexOf(keyword) >= 0;
+        });
+
+        // 分页
+        var total = filteredGoods.length;
+        var totalPages = Math.ceil(total / singleProductModalState.pageSize);
+        var start = (singleProductModalState.currentPage - 1) * singleProductModalState.pageSize;
+        var end = Math.min(start + singleProductModalState.pageSize, total);
+        var pageGoods = filteredGoods.slice(start, end);
+
+        // 生成HTML
+        var html = pageGoods.map(function(goods) {
+          var isSelected = goods.id === singleProductModalState.selectedProductId;
+          return '<div class="single-product-card' + (isSelected ? ' selected' : '') + '" data-id="' + goods.id + '" data-name="' + goods.name + '" style="position:relative;">' +
+            '<div class="single-product-card-img">' +
+              (goods.image ? '<img src="' + goods.image + '" alt="' + goods.name + '" />' : '<span class="placeholder">📦</span>') +
+            '</div>' +
+            '<div class="single-product-card-info">' +
+              '<div class="single-product-card-name">' + goods.name + '</div>' +
+              '<div class="single-product-card-price">' + goods.price + '</div>' +
+            '</div>' +
+            '<div class="single-product-card-check">✓</div>' +
+          '</div>';
+        }).join('');
+
+        if (pageGoods.length === 0) {
+          html = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-muted);">暂无匹配商品</div>';
+        }
+
+        listEl.innerHTML = html;
+
+        // 更新分页信息
+        var paginationInfo = document.getElementById('single-product-pagination-info');
+        paginationInfo.textContent = '共 ' + total + ' 件商品，第 ' + singleProductModalState.currentPage + '/' + Math.max(1, totalPages) + ' 页';
+
+        document.getElementById('single-product-pagination-prev').disabled = singleProductModalState.currentPage <= 1;
+        document.getElementById('single-product-pagination-next').disabled = singleProductModalState.currentPage >= totalPages;
+      }
+
+      // 更新底部已选信息
+      function updateSingleProductFooter() {
+        var nameEl = document.getElementById('single-product-selected-name');
+        if (singleProductModalState.selectedProductId && singleProductModalState.selectedProductName) {
+          nameEl.textContent = singleProductModalState.selectedProductName;
+          nameEl.style.fontWeight = '500';
+        } else {
+          nameEl.textContent = '未选择';
+          nameEl.style.fontWeight = 'normal';
+        }
+      }
+
+      // 初始化单商品选择弹窗事件
+      function initSingleProductModal() {
+        var modal = document.getElementById('modal-single-product');
+        if (!modal) return;
+
+        // 关闭按钮
+        modal.querySelectorAll('.modal-close, .modal-cancel').forEach(function(btn) {
+          btn.addEventListener('click', closeSingleProductModal);
+        });
+
+        // 点击遮罩关闭
+        modal.addEventListener('click', function(e) {
+          if (e.target === modal) closeSingleProductModal();
+        });
+
+        // 搜索
+        var searchInput = document.getElementById('single-product-search-input');
+        var searchBtn = document.getElementById('single-product-search-btn');
+
+        searchBtn.addEventListener('click', function() {
+          singleProductModalState.searchKeyword = searchInput.value;
+          singleProductModalState.currentPage = 1;
+          renderSingleProductList();
+        });
+
+        searchInput.addEventListener('keypress', function(e) {
+          if (e.key === 'Enter') {
+            singleProductModalState.searchKeyword = searchInput.value;
+            singleProductModalState.currentPage = 1;
+            renderSingleProductList();
+          }
+        });
+
+        // 分页
+        document.getElementById('single-product-pagination-prev').addEventListener('click', function() {
+          if (singleProductModalState.currentPage > 1) {
+            singleProductModalState.currentPage--;
+            renderSingleProductList();
+          }
+        });
+
+        document.getElementById('single-product-pagination-next').addEventListener('click', function() {
+          singleProductModalState.currentPage++;
+          renderSingleProductList();
+        });
+
+        // 选择商品
+        document.getElementById('single-product-list').addEventListener('click', function(e) {
+          var card = e.target.closest('.single-product-card');
+          if (!card) return;
+
+          // 移除其他选中
+          this.querySelectorAll('.single-product-card').forEach(function(c) {
+            c.classList.remove('selected');
+          });
+
+          // 设置选中
+          card.classList.add('selected');
+          singleProductModalState.selectedProductId = card.dataset.id;
+          singleProductModalState.selectedProductName = card.dataset.name;
+          updateSingleProductFooter();
+        });
+
+        // 确认选择
+        document.getElementById('btn-single-product-confirm').addEventListener('click', function() {
+          if (singleProductModalState.onSelect) {
+            singleProductModalState.onSelect(singleProductModalState.selectedProductId, singleProductModalState.selectedProductName);
+          }
+          closeSingleProductModal();
+        });
+      }
+
+      // 素材库弹窗事件绑定
+      function initImagePickerModal() {
+        var modal = document.getElementById('modal-image-picker');
+        if (!modal) return;
+
+        // 关闭按钮
+        modal.querySelectorAll('.modal-close, .modal-cancel').forEach(function(btn) {
+          btn.addEventListener('click', closeImagePickerModal);
+        });
+
+        // 搜索按钮
+        var searchBtn = document.getElementById('image-picker-search-btn');
+        var searchInput = document.getElementById('image-picker-search-input');
+        if (searchBtn && searchInput) {
+          searchBtn.addEventListener('click', function() {
+            imagePickerState.searchKeyword = searchInput.value;
+            imagePickerState.currentPage = 1;
+            renderImagePickerList();
+          });
+          searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+              imagePickerState.searchKeyword = searchInput.value;
+              imagePickerState.currentPage = 1;
+              renderImagePickerList();
+            }
+          });
+        }
+
+        // 确认按钮
+        var confirmBtn = document.getElementById('btn-image-picker-confirm');
+        if (confirmBtn) {
+          confirmBtn.addEventListener('click', confirmImagePicker);
+        }
+
+        // 点击遮罩关闭
+        modal.addEventListener('click', function(e) {
+          if (e.target === modal) {
+            closeImagePickerModal();
+          }
+        });
+      }
+
+      // ===== 商品列表 Mock 数据（100个商品）=====
+      const MOCK_GOODS_DATA = MallBuilder.data.MOCK_GOODS_DATA;
+      const goodsPaginationState = MallBuilder.data.goodsPaginationState;
+
+      // ===== 品牌/标签/分类 Mock 数据（Phase 2 外置到 common/data/mock-taxonomy.js，别名引用）=====
+      const MOCK_BRANDS = MallBuilder.data.MOCK_BRANDS;
+      const MOCK_TAGS = MallBuilder.data.MOCK_TAGS;
+      const MOCK_CATEGORIES = MallBuilder.data.MOCK_CATEGORIES;
+
+      // 工具函数：将树形结构扁平化为列表（用于名称查找，包含所有层级节点）
+      function flattenTreeNodes(nodes) {
+        var result = [];
+        if (!nodes) return result;
+        nodes.forEach(function(node) {
+          result.push(node);
+          if (node.isGroup && node.children) {
+            result = result.concat(flattenTreeNodes(node.children));
+          }
+        });
+        return result;
+      }
+
+      // 商品数据来源弹窗状态（商品分组用）
+      let goodsSourceModalState = {
+        floorId: null,
+        groupId: null,
+        sourceType: 'brand',
+        selectedItems: [],
+        sortType: 'comprehensive',
+        // 单品模式搜索和分页
+        productSearchKeyword: '',
+        productCurrentPage: 1,
+        productPageSize: 16
+      };
+
+      // 商品列表数据来源弹窗状态
+      let goodsListSourceModalState = {
+        floorId: null,
+        sourceType: 'brand',
+        selectedItems: [],
+        sortType: 'comprehensive',
+        // 单品模式搜索和分页
+        productSearchKeyword: '',
+        productCurrentPage: 1,
+        productPageSize: 16
+      };
+
+      // 重置商品分页状态
+      function resetGoodsPagination() {
+        goodsPaginationState.currentPage = 1;
+        goodsPaginationState.loading = false;
+        goodsPaginationState.hasMore = true;
+      }
+
+      // 获取当前页商品
+      function getCurrentPageGoods(page) {
+        const start = 0;
+        const end = page * goodsPaginationState.pageSize;
+        return MOCK_GOODS_DATA.slice(start, end);
+      }
+
+      // 加载下一页商品
+      function loadMoreGoods() {
+        if (goodsPaginationState.loading || !goodsPaginationState.hasMore) return;
+        const nextPage = goodsPaginationState.currentPage + 1;
+        const totalLoaded = nextPage * goodsPaginationState.pageSize;
+        if (totalLoaded >= MOCK_GOODS_DATA.length) {
+          goodsPaginationState.hasMore = false;
+        }
+        goodsPaginationState.currentPage = nextPage;
+        return goodsPaginationState.currentPage;
+      }
+
+      const components = [
+        {
+          type: 'search-bar',
+          name: '搜索框',
+          desc: '顶部搜索框组件，支持设置占位文字和样式',
+          category: '基础',
+          defaultConfig: {
+            placeholder: '搜索商品、优惠券、活动',
+            backgroundColor: '#f3f6fb',
+            borderRadius: 17,
+            height: 34,
+            showScanIcon: false,
+            showVoiceIcon: false,
+            // 边距设置
+            pagePadding: 12, // 页面边距
+          }
+        },
+        {
+          type: 'goods-list',
+          name: '商品列表',
+          desc: '展示多条商品信息的布局组件，支持多种列表样式和商品属性配置',
+          category: '商品',
+          defaultConfig: {
+            listStyle: 'large-single', // 大图单列, small-double, detail-list, small-triple, one-large-two-small, horizontal-scroll
+            dataSource: 'brand', // brand, tag
+            sortType: 'comprehensive', // comprehensive, sales, comments, goodRate, serial, manual, category, newest
+            backgroundColor: '#ffffff',
+            showSpuName: true,
+            showSkuSpec: true,
+            showPrice: true,
+            showTag: false,
+            cartStyle: 'style1', // style1, style2, style3
+            cornerTag: 'none', // none, new, hot, sale, group, seckill, custom
+            customCornerTag: '',
+            goodsCount: 20,
+            priceDisplay: 'price', // price, points, price-points
+            showOriginalPrice: false,
+            enableCustomSort: false,
+            // 边距设置
+            pagePadding: 0, // 页面边距
+            goodsPadding: 10, // 商品卡片间距
+            // 边角样式
+            cornerStyle: 'rounded', // rounded 圆角, square 直角
+            goodsCorner: 'rounded', // 商品卡片倒角: rounded 圆角, square 直角
+          }
+        },
+        {
+          type: 'goods-group',
+          name: '商品分组',
+          desc: '商品分类导航和分组展示组件，支持分类菜单和商品列表',
+          category: '商品',
+          defaultConfig: {
+            // 菜单样式
+            menuBgColor: '#ffffff',
+            menuStyle: 'rounded', // rounded, square
+            showGroupName: true,
+            // 列表样式
+            listStyle: 'small-double', // large-single, small-double, detail-list, small-triple, one-large-two-small, horizontal-scroll
+            // 商品样式
+            goodsStyle: 'card-shadow', // no-border-white, card-shadow, border-white, no-border-transparent, promotion, waterfall
+            // 购买按钮
+            cartStyle: 'style1', // style1, style2, style3
+            // 显示设置
+            showDesc: true,
+            showOriginalPrice: false,
+            showPrice: true,
+            showSales: true,
+            // 文本样式
+            textStyle: 'normal', // bold, normal
+            // 商品倒角
+            goodsCorner: 'rounded', // rounded, square
+            // 边距设置
+            pagePadding: 0,
+            goodsPadding: 10,
+            // 换一换
+            enableRefresh: false,
+            // 分组配置
+            groups: [
+              { id: 'group-1', name: '推荐', dataSource: 'brand', sortType: 'comprehensive', goodsCount: 20 },
+              { id: 'group-2', name: '新品', dataSource: 'brand', sortType: 'newest', goodsCount: 20 },
+              { id: 'group-3', name: '热销', dataSource: 'brand', sortType: 'sales', goodsCount: 20 },
+            ],
+            activeGroupId: 'group-1',
+          }
+        },
+        {
+          type: 'rich-text',
+          name: '富文本域',
+          desc: '允许用户输入、编辑和展示带有样式和多媒体内容的文本块',
+          category: '页面装修',
+          defaultConfig: {
+            // 内容配置
+            content: '<p style="color:#1677ff;font-size:15px;">点此编辑『富文本』内容 ----></p>\n<p>你可以对文字进行<strong>加粗</strong>、<em>斜体</em>、<u>下划线</u>、<s>删除线</s>、<span style="color: red;">文字颜色</span>、<span style="background-color: yellow;">背景色</span>、以及字号大小等简单排版操作。</p>\n<p>还可以在这里加入表格了</p>\n<table style="width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px;">\n<thead>\n<tr style="background: #f5f5f5;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">中奖客户</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">发放奖品</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">备注</th></tr>\n</thead>\n<tbody>\n<tr><td style="border: 1px solid #ddd; padding: 8px;">猪猪</td><td style="border: 1px solid #ddd; padding: 8px;">内测码</td><td style="border: 1px solid #ddd; padding: 8px;"><em>已经发放</em></td></tr>\n<tr><td style="border: 1px solid #ddd; padding: 8px;">大麦</td><td style="border: 1px solid #ddd; padding: 8px;">积分</td><td style="border: 1px solid #ddd; padding: 8px;"><a href="#">领取地址</a></td></tr>\n</tbody>\n</table>\n<p>也可在这里插入图片、并对图片加上超级链接，方便用户点击。</p>',
+            isDefaultContent: true, // 标记是否为默认内容
+            // 背景设置
+            backgroundColor: '#ffffff',
+            backgroundImage: '',
+            backgroundRepeat: 'no-repeat',
+            backgroundSize: 'cover',
+            // 边距设置
+            paddingTop: 14,
+            paddingBottom: 14,
+            paddingLeft: 14,
+            paddingRight: 14,
+            // 最大宽度
+            maxWidth: 0, // 0 表示不限制
+            // 文字颜色
+            textColor: '#333333',
+            // 边角样式
+            cornerStyle: 'rounded', // rounded 圆角, square 直角
+          }
+        },
+        {
+          type: 'title',
+          name: '标题',
+          desc: '在页面中提供结构化的文字标记，用于标识页面、区块或内容的名称',
+          category: '页面装修',
+          defaultConfig: {
+            // 标题内容
+            title: '标题文字',
+            subtitle: '', // 副标题/描述（可选）
+            // 显示位置
+            align: 'left', // left, center, right
+            // 标题样式
+            titleSize: 18, // 标题字号
+            titleColor: '#333333',
+            titleWeight: 'bold', // bold, normal
+            // 副标题样式
+            subtitleSize: 13,
+            subtitleColor: '#8c8c8c',
+            // 背景
+            backgroundColor: '#ffffff',
+            // 边距
+            paddingTop: 14,
+            paddingBottom: 14,
+            paddingLeft: 14,
+            paddingRight: 14,
+            // 边角样式
+            cornerStyle: 'rounded', // rounded 圆角, square 直角
+          }
+        },
+        {
+          type: 'big-bg-image',
+          name: '大背景图',
+          desc: '占据页面主要视觉区域，用于建立界面视觉基调、传达核心品牌信息',
+          category: '页面装修',
+          defaultConfig: {
+            // 背景设置
+            backgroundImage: '',
+            backgroundColor: '#f5f5f5',
+            backgroundSize: 'cover', // cover, contain, auto
+            backgroundPosition: 'center', // center, top, bottom, left, right
+            backgroundRepeat: 'no-repeat',
+            // 高度设置
+            height: 200, // 默认高度
+            // 内容设置
+            content: '', // 可选：背景图上叠加的内容
+            contentColor: '#ffffff',
+            // 链接
+            link: '',
+            // 页面边距
+            pagePadding: 0,
+          }
+        },
+        {
+          type: 'text',
+          name: '文本',
+          desc: '展示纯文本内容，如描述、标签、段落说明、静态数据等',
+          category: '页面装修',
+          defaultConfig: {
+            // 文本内容
+            content: '在此输入文本内容...',
+            // 显示位置
+            align: 'left', // left, center, right
+            // 文本样式
+            fontSize: 14,
+            fontColor: '#333333',
+            fontWeight: 'normal', // bold, normal
+            lineHeight: 1.6,
+            // 背景
+            backgroundColor: '#ffffff',
+            // 边距
+            paddingTop: 12,
+            paddingBottom: 12,
+            paddingLeft: 14,
+            paddingRight: 14,
+            // 边角样式
+            cornerStyle: 'rounded', // rounded 圆角, square 直角
+          }
+        },
+        {
+          type: 'link',
+          name: '关联链接',
+          desc: '提供导航和跳转功能，点击文本或图像触发导航行为',
+          category: '页面装修',
+          defaultConfig: {
+            // 链接显示
+            text: '点击跳转',
+            icon: '', // 可选图标
+            // 链接配置
+            linkType: 'page', // page, external, tel
+            linkUrl: '',
+            targetPageId: '', // 内部页面ID
+            // 样式设置
+            textColor: '#1677ff',
+            fontSize: 14,
+            textDecoration: 'underline', // none, underline
+            // 背景
+            backgroundColor: '#ffffff',
+            // 边距
+            paddingTop: 10,
+            paddingBottom: 10,
+            paddingLeft: 14,
+            paddingRight: 14,
+            // 边角样式
+            cornerStyle: 'rounded', // rounded 圆角, square 直角
+          }
+        },
+        {
+          type: 'carousel',
+          name: '轮播图',
+          desc: '在有限空间内循环展示多张图片或宣传横幅，通常用于首页或营销活动区域',
+          category: '页面装修',
+          defaultConfig: {
+            // 图片配置
+            slides: [
+              { image: '../assets/banner素材.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '../assets/banner素材2.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+            ],
+            // 风格设置
+            styleMode: 'standard', // standard 标准, immersive 沉浸式
+            // 图片样式
+            height: 180,
+            imageCorner: 'rounded', // rounded 圆角, square 直角 - 图片边角样式
+            // 轮播设置
+            autoplay: true,
+            interval: 3000,
+            // 圆点设置
+            dotStyle: 'round', // round 圆形, bar 长条形
+            dotPosition: 'bottom', // bottom 底部, inside 内嵌
+            // 背景颜色
+            backgroundColor: '#ffffff',
+            // 边距设置
+            pagePadding: 0, // 页面边距
+            // 边角样式
+            cornerStyle: 'rounded', // rounded 圆角, square 直角 - 容器边角
+          }
+        },
+        {
+          type: 'icon-nav',
+          name: '图文导航',
+          desc: '将图标或小图片与简短文字结合的交互式导航，集中展示核心功能或重要入口',
+          category: '页面装修',
+          defaultConfig: {
+            // 模板类型
+            template: 'image-nav', // image-nav 图片导航, text-nav 文字导航
+            // 布局样式
+            layoutStyle: 'fixed', // fixed 固定, scroll 横向滑动
+            // 显示行数（固定模式下生效）
+            rows: 1, // 1 一行, 2 两行
+            // 导航项配置
+            navItems: [
+              { icon: '⚡', image: '', text: '限时秒杀', link: '' },
+              { icon: '🏷️', image: '', text: '品牌特卖', link: '' },
+              { icon: '🆕', image: '', text: '新品上市', link: '' },
+              { icon: '🔥', image: '', text: '热销榜', link: '' },
+              { icon: '🎫', image: '', text: '领券中心', link: '' },
+            ],
+            // 背景颜色
+            backgroundColor: '#ffffff',
+            // 文字颜色
+            textColor: '#333333',
+            // 文字大小
+            textSize: 12,
+            // 边距设置
+            pagePadding: 0, // 页面边距
+            // 边角样式
+            cornerStyle: 'rounded', // rounded 圆角, square 直角 - 容器边角
+            // 图片边角样式
+            imageCorner: 'rounded', // rounded 圆角, square 直角 - 导航图片边角
+          }
+        },
+        {
+          type: 'float-button',
+          name: '悬浮组件',
+          desc: '悬浮功能按钮，支持置顶、购物车、客服等多个功能入口',
+          category: '页面装修',
+          defaultConfig: {
+            // 悬浮位置
+            position: 'right', // left 左侧, right 右侧
+            // 距离底部距离
+            bottomMargin: 80,
+            // 按钮间距
+            buttonGap: 12,
+            // 功能按钮配置
+            buttons: [
+              {
+                id: 'back-top',
+                type: 'back-top', // back-top 置顶, cart 购物车, service 客服
+                enabled: true,
+                name: '置顶',
+                // 按钮样式
+                backgroundColor: '#ff6b35',
+                iconColor: '#ffffff',
+                buttonSize: 44,
+                borderRadius: 50,
+                // 跳转配置（置顶固定为回到顶部，其他类型可配置）
+                jumpType: 'none',
+                jumpTarget: ''
+              }
+            ]
+          }
+        },
+        {
+          type: 'elevator-nav',
+          name: '电梯导航',
+          desc: '辅助用户在长页面内快速定位和跳转的导航机制，固定在页面顶部提供目录索引',
+          category: '页面装修',
+          defaultConfig: {
+            // 模板类型
+            templateType: 'text', // text 文字类型, image-text 图文类型, image 图片类型
+            // 展示方式
+            displayMode: 'scroll', // scroll 横向滚动, fixed 固定
+            // 标签风格
+            tagStyle: 'underline', // bg 背景模式, rounded 圆框, square 方框, underline 下划线
+            // 选中颜色（下划线模式下同时用于文字和下划线）
+            activeBgColor: '#ff6b35',
+            // 默认文字色
+            defaultTextColor: '#333333',
+            // 组件背景颜色
+            backgroundColor: '#ffffff',
+            // 标签配置
+            tags: [
+              { text: '推荐', image: '', targetFloorId: '' },
+              { text: '新品', image: '', targetFloorId: '' },
+              { text: '热销', image: '', targetFloorId: '' },
+              { text: '促销', image: '', targetFloorId: '' },
+            ],
+            activeIndex: 0,
+            // 边距设置
+            pagePadding: 0, // 页面边距
+            // 吸顶设置
+            enableSticky: false, // 开启吸顶
+            stickyTop: 0, // 吸顶距离(px)
+          }
+        },
+        {
+          type: 'personal-recommend',
+          name: '个性化推荐',
+          desc: '基于用户行为的个性化商品推荐，支持多种推荐规则和换一换功能',
+          category: '页面装修',
+          defaultConfig: {
+            // 推荐规则
+            recommendRule: 'guess', // guess 猜你喜欢, view-again 看了又看, buy-again 买了又买, everyone-buy 大家都在买
+            // 换一换功能
+            enableRefresh: true,
+            // 列表样式（参照商品列表）
+            listStyle: 'small-double', // large-single, small-double, detail-list, small-triple, one-large-two-small, horizontal-scroll
+            // 显示设置
+            showGoodsName: true,
+            showPrice: true,
+            showSales: true,
+            showOriginalPrice: false,
+            // 购物车样式
+            cartStyle: 'style1',
+            // 商品数量
+            goodsCount: 6,
+            // 背景颜色
+            backgroundColor: '#ffffff',
+            // 标题配置
+            title: '为你推荐',
+            showTitle: true,
+            // 边距设置
+            pagePadding: 0, // 页面边距
+            goodsPadding: 10, // 商品卡片间距
+            // 边角样式
+            cornerStyle: 'rounded', // rounded 圆角, square 直角
+            goodsCorner: 'rounded', // 商品卡片倒角: rounded 圆角, square 直角
+          }
+        },
+        {
+          type: 'custom-component',
+          name: '自定义组件',
+          desc: '通过HTML代码自定义创建组件内容，满足个性化需求',
+          category: '页面装修',
+          defaultConfig: {
+            // 自定义内容
+            customHtml: '',
+            // 样式设置
+            backgroundColor: '#ffffff',
+            padding: 10,
+            // 组件名称（用于标识）
+            componentName: '自定义组件',
+            // 页面边距
+            pagePadding: 0,
+          }
+        },
+        {
+          type: 'mine-nav-grid',
+          name: '图文导航',
+          desc: '图标+文字导航网格，支持自定义列数和图标颜色',
+          category: '我的页面',
+          defaultConfig: {
+            title: '',
+            showTitle: false,
+            showViewAll: false,
+            columns: 4,
+            navItems: [
+              { icon: '📍', image: '', name: '导航项1', link: '', iconColor: 'blue' },
+              { icon: '❤️', image: '', name: '导航项2', link: '', iconColor: 'pink' },
+              { icon: '💬', image: '', name: '导航项3', link: '', iconColor: 'purple' },
+              { icon: '⭐', image: '', name: '导航项4', link: '', iconColor: 'orange' },
+            ],
+            backgroundColor: '#ffffff',
+          }
+        },
+        {
+          type: 'mine-menu-list',
+          name: '菜单导航',
+          desc: '图标+文字+箭头的菜单列表',
+          category: '我的页面',
+          defaultConfig: {
+            title: '',
+            showTitle: false,
+            menuItems: [
+              { icon: '📍', image: '', name: '菜单项1', link: '' },
+              { icon: '⚙️', image: '', name: '菜单项2', link: '' },
+              { icon: '💬', image: '', name: '菜单项3', link: '' },
+            ],
+            backgroundColor: '#ffffff',
+          }
+        },
+      ];
+
+      const pageStore = [];
+
+      // 分类数据（三级分类）
+      const categoryData = [
+        {
+          id: 'cat-1', name: '服装服饰',
+          children: [
+            {
+              id: 'cat-1-1', name: '男装',
+              children: [
+                { id: 'cat-1-1-1', name: 'T恤' },
+                { id: 'cat-1-1-2', name: '衬衫' },
+                { id: 'cat-1-1-3', name: '夹克' },
+                { id: 'cat-1-1-4', name: '羽绒服' },
+                { id: 'cat-1-1-5', name: '牛仔裤' },
+              ]
+            },
+            {
+              id: 'cat-1-2', name: '女装',
+              children: [
+                { id: 'cat-1-2-1', name: '连衣裙' },
+                { id: 'cat-1-2-2', name: '半身裙' },
+                { id: 'cat-1-2-3', name: '针织衫' },
+                { id: 'cat-1-2-4', name: '风衣' },
+                { id: 'cat-1-2-5', name: '卫衣' },
+              ]
+            },
+            {
+              id: 'cat-1-3', name: '童装',
+              children: [
+                { id: 'cat-1-3-1', name: '男童上装' },
+                { id: 'cat-1-3-2', name: '女童上装' },
+                { id: 'cat-1-3-3', name: '童装裤装' },
+              ]
+            },
+          ]
+        },
+        {
+          id: 'cat-2', name: '数码电器',
+          children: [
+            {
+              id: 'cat-2-1', name: '手机通讯',
+              children: [
+                { id: 'cat-2-1-1', name: '智能手机' },
+                { id: 'cat-2-1-2', name: '游戏手机' },
+                { id: 'cat-2-1-3', name: '老人机' },
+              ]
+            },
+            {
+              id: 'cat-2-2', name: '电脑办公',
+              children: [
+                { id: 'cat-2-2-1', name: '笔记本' },
+                { id: 'cat-2-2-2', name: '台式机' },
+                { id: 'cat-2-2-3', name: '显示器' },
+                { id: 'cat-2-2-4', name: '平板电脑' },
+              ]
+            },
+            {
+              id: 'cat-2-3', name: '家用电器',
+              children: [
+                { id: 'cat-2-3-1', name: '冰箱' },
+                { id: 'cat-2-3-2', name: '洗衣机' },
+                { id: 'cat-2-3-3', name: '空调' },
+                { id: 'cat-2-3-4', name: '电视' },
+              ]
+            },
+          ]
+        },
+        {
+          id: 'cat-3', name: '美妆护肤',
+          children: [
+            {
+              id: 'cat-3-1', name: '面部护肤',
+              children: [
+                { id: 'cat-3-1-1', name: '洁面' },
+                { id: 'cat-3-1-2', name: '爽肤水' },
+                { id: 'cat-3-1-3', name: '精华' },
+                { id: 'cat-3-1-4', name: '面霜' },
+              ]
+            },
+            {
+              id: 'cat-3-2', name: '彩妆',
+              children: [
+                { id: 'cat-3-2-1', name: '口红' },
+                { id: 'cat-3-2-2', name: '粉底' },
+                { id: 'cat-3-2-3', name: '眼影' },
+                { id: 'cat-3-2-4', name: '睫毛膏' },
+              ]
+            },
+          ]
+        },
+        {
+          id: 'cat-4', name: '食品生鲜',
+          children: [
+            {
+              id: 'cat-4-1', name: '休闲零食',
+              children: [
+                { id: 'cat-4-1-1', name: '坚果炒货' },
+                { id: 'cat-4-1-2', name: '糖果巧克力' },
+                { id: 'cat-4-1-3', name: '饼干蛋糕' },
+              ]
+            },
+            {
+              id: 'cat-4-2', name: '生鲜水果',
+              children: [
+                { id: 'cat-4-2-1', name: '热带水果' },
+                { id: 'cat-4-2-2', name: '国产水果' },
+                { id: 'cat-4-2-3', name: '进口水果' },
+              ]
+            },
+          ]
+        },
+        {
+          id: 'cat-5', name: '家居家装',
+          children: [
+            {
+              id: 'cat-5-1', name: '家具',
+              children: [
+                { id: 'cat-5-1-1', name: '沙发' },
+                { id: 'cat-5-1-2', name: '床' },
+                { id: 'cat-5-1-3', name: '衣柜' },
+              ]
+            },
+            {
+              id: 'cat-5-2', name: '家纺',
+              children: [
+                { id: 'cat-5-2-1', name: '床上用品' },
+                { id: 'cat-5-2-2', name: '窗帘' },
+                { id: 'cat-5-2-3', name: '毛巾浴巾' },
+              ]
+            },
+          ]
+        },
+      ];
+
+      // 品牌数据（一级）
+      const brandData = [
+        { id: 'brand-1', name: 'Apple' },
+        { id: 'brand-2', name: '华为' },
+        { id: 'brand-3', name: '小米' },
+        { id: 'brand-4', name: 'OPPO' },
+        { id: 'brand-5', name: 'vivo' },
+        { id: 'brand-6', name: '三星' },
+        { id: 'brand-7', name: '联想' },
+        { id: 'brand-8', name: '戴尔' },
+        { id: 'brand-9', name: '惠普' },
+        { id: 'brand-10', name: '耐克' },
+        { id: 'brand-11', name: '阿迪达斯' },
+        { id: 'brand-12', name: '优衣库' },
+        { id: 'brand-13', name: 'ZARA' },
+        { id: 'brand-14', name: 'H&M' },
+        { id: 'brand-15', name: '兰蔻' },
+        { id: 'brand-16', name: '雅诗兰黛' },
+        { id: 'brand-17', name: 'SK-II' },
+        { id: 'brand-18', name: '资生堂' },
+      ];
+
+      // 标签数据（二级）
+      const tagData = [
+        {
+          id: 'tag-group-1', name: '促销标签',
+          children: [
+            { id: 'tag-1-1', name: '限时折扣' },
+            { id: 'tag-1-2', name: '满减优惠' },
+            { id: 'tag-1-3', name: '买一送一' },
+            { id: 'tag-1-4', name: '新品首发' },
+            { id: 'tag-1-5', name: '清仓特卖' },
+          ]
+        },
+        {
+          id: 'tag-group-2', name: '品质标签',
+          children: [
+            { id: 'tag-2-1', name: '正品保障' },
+            { id: 'tag-2-2', name: '品质优选' },
+            { id: 'tag-2-3', name: '官方授权' },
+            { id: 'tag-2-4', name: '进口原装' },
+          ]
+        },
+        {
+          id: 'tag-group-3', name: '服务标签',
+          children: [
+            { id: 'tag-3-1', name: '包邮' },
+            { id: 'tag-3-2', name: '急速发货' },
+            { id: 'tag-3-3', name: '七天无理由' },
+            { id: 'tag-3-4', name: '上门安装' },
+          ]
+        },
+        {
+          id: 'tag-group-4', name: '人群标签',
+          children: [
+            { id: 'tag-4-1', name: '男士推荐' },
+            { id: 'tag-4-2', name: '女士推荐' },
+            { id: 'tag-4-3', name: '亲子精选' },
+            { id: 'tag-4-4', name: '长辈优选' },
+          ]
+        },
+      ];
+
+      // 页面类型和模板配置
+      const PAGE_TYPE_CONFIG = {
+        home: {
+          name: '首页',
+          icon: '🏠',
+          templates: [
+            { id: 'home-standard', name: '标准首页', desc: '包含搜索框、轮播图、图文导航、商品推荐、置顶功能等模块', previewIcon: '📱', floors: [
+              { id: 'floor-search', type: 'search-bar', name: '搜索框', desc: '顶部搜索入口', searchBarConfig: { placeholder: '搜索商品、优惠券、活动', backgroundColor: '#f3f6fb', borderRadius: 17, height: 34, showScanIcon: false, showVoiceIcon: false } },
+              { id: 'floor-carousel', type: 'carousel', name: '轮播图', desc: '主视觉焦点图', carouselConfig: { slides: [{ image: '../assets/banner素材.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' }, { image: '../assets/banner素材2.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' }], height: 180, borderRadius: 8, cornerStyle: 'rounded', autoplay: true, interval: 3000, dotStyle: 'round', dotPosition: 'bottom', backgroundColor: '#ffffff' } },
+              { id: 'floor-icon-nav', type: 'icon-nav', name: '图文导航', desc: '核心功能入口导航', iconNavConfig: { template: 'image-nav', layoutStyle: 'fixed', rows: 1, navItems: [{ icon: '⚡', image: '', text: '限时秒杀', link: '' }, { icon: '🏷️', image: '', text: '品牌特卖', link: '' }, { icon: '🆕', image: '', text: '新品上市', link: '' }, { icon: '🔥', image: '', text: '热销榜', link: '' }, { icon: '🎫', image: '', text: '领券中心', link: '' }], backgroundColor: '#ffffff', textColor: '#333333', textSize: 12 } },
+              { id: 'floor-goods', type: 'goods-list', name: '商品推荐', desc: '商品列表展示', goodsListConfig: { listStyle: 'large-single', dataSource: 'brand', sortType: 'comprehensive', backgroundColor: '#ffffff', showSpuName: true, showSkuSpec: true, showPrice: true, showTag: false, cartStyle: 'style1', cornerTag: 'none', customCornerTag: '', goodsCount: 20 } },
+              { id: 'floor-float-btn', type: 'float-button', name: '悬浮组件', desc: '悬浮功能按钮', floatButtonConfig: { position: 'right', bottomMargin: 80, buttonGap: 12, buttons: [{ id: 'btn-1', type: 'back-top', enabled: true, name: '置顶', backgroundColor: '#ff6b35', iconColor: '#ffffff', buttonSize: 44, borderRadius: 50, jumpType: 'none', jumpTarget: '' }] } },
+            ]}
+          ]
+        },
+        category: {
+          name: '分类页',
+          icon: '📋',
+          templates: [
+            { id: 'category-level3', name: '三级分类页', desc: '左侧一级分类 + 右侧二级分组与三级图标网格', categoryPreset: 'page1', previewIcon: '📑' },
+            { id: 'category-level2', name: '二级分类页', desc: '左侧一级分类 + 右侧二级图标网格', categoryPreset: 'page2', previewIcon: '📋' },
+            { id: 'category-level2-list', name: '二级分类+商品列表', desc: '左侧一级分类 + 右侧 Tab 子分类 + 商品列表', categoryPreset: 'page3', previewImage: '../assets/category-page3-ref.png' },
+            { id: 'category-level1-tab', name: '一级分类（横向Tab）', desc: '顶部横向 Tab 子分类 + 商品列表', categoryPreset: 'page4', previewImage: '../assets/category-page4-ref.png' },
+            { id: 'category-level1-list', name: '一级分类（直接列表）', desc: '左侧一级分类 + 右侧直接商品列表', categoryPreset: 'page5', previewImage: '../assets/category-page5-ref.png' },
+          ]
+        },
+        mine: {
+          name: '我的',
+          icon: '👤',
+          templates: [
+            { id: 'mine-ecommerce', name: '电商商城模板', desc: '标准电商会员中心，包含用户信息、订单入口、常用功能', minePreset: 'ecommerce', previewIcon: '🛒', floors: [
+              { id: 'floor-mine-header', type: 'mine-header', name: '用户信息区', desc: '头像、昵称、会员等级、设置入口', fixed: true, mineHeaderConfig: { avatarUrl: '', nickname: '悦享用户', memberLevel: '黄金会员', showLevelBadge: true, showSettingsIcon: true, backgroundColor: '#ff6034' } },
+              { id: 'floor-mine-stats', type: 'mine-stats-bar', name: '资产栏', desc: '积分、卡券等资产统计', fixed: true, mineStatsBarConfig: { backgroundColor: '#ff6034', statsItems: [{ value: '1,280', label: '积分中心', link: '/points' }, { value: '5', label: '卡券', link: '/coupons' }] } },
+              { id: 'floor-mine-orders', type: 'mine-nav-grid', name: '我的订单', desc: '订单状态入口', fixed: true, mineNavGridConfig: { title: '我的订单', showTitle: true, showViewAll: true, columns: 5, navItems: [{ icon: '💰', image: '', name: '待付款', link: '/orders/unpaid', iconColor: 'orange', badge: '1' }, { icon: '📦', image: '', name: '待发货', link: '/orders/unshipped', iconColor: 'blue' }, { icon: '🚚', image: '', name: '待收货', link: '/orders/shipped', iconColor: 'green', badge: '2' }, { icon: '⭐', image: '', name: '待评价', link: '/orders/unreviewed', iconColor: 'yellow' }, { icon: '🔄', image: '', name: '退换/售后', link: '/orders/refund', iconColor: 'red' }], backgroundColor: '#ffffff' } },
+              { id: 'floor-mine-services', type: 'mine-nav-grid', name: '常用服务', desc: '常用功能入口', mineNavGridConfig: { title: '', showTitle: false, columns: 4, navItems: [{ icon: '👛', image: '', name: '我的钱包', link: '/wallet', iconColor: 'orange' }, { icon: '❤️', image: '', name: '我的收藏', link: '/favorites', iconColor: 'pink' }, { icon: '💬', image: '', name: '我的评价', link: '/reviews', iconColor: 'purple' }, { icon: '🎁', image: '', name: '我的优惠券', link: '/coupons', iconColor: 'pink' }, { icon: '⭐', image: '', name: '积分中心', link: '/points', iconColor: 'green' }], backgroundColor: '#ffffff' } },
+              { id: 'floor-mine-menu', type: 'mine-menu-list', name: '更多服务', desc: '其他功能入口', mineMenuListConfig: { title: '', showTitle: false, menuItems: [{ icon: '📍', image: '', name: '收货地址', link: '/address' }, { icon: '🕐', image: '', name: '浏览记录', link: '/history' }, { icon: '💳', image: '', name: '卡券绑定', link: '/card-bind' }, { icon: '❓', image: '', name: '帮助中心', link: '/help' }, { icon: '✉️', image: '', name: '意见反馈', link: '/feedback' }], backgroundColor: '#ffffff' } },
+            ]},
+          ]
+        }
+      };
+
+      let currentPanel = 'pages';
+      let currentPageId = '';
+      let currentPageGroup = 'main';
+      let selectedFloorId = '';
+      let draggingFloorId = '';
+      const bannerAutoplayTimers = {};
+      const tabbarConfig = {
+        defaultColor: '#94a3b8',
+        activeColor: '#ff6034',
+        fontSize: 11,
+        showText: true,
+        backgroundColor: '#ffffff',
+        height: 66,
+        borderColor: '#edf2f7',
+        iconGap: 4,
+      };
+      let tabItems = [
+        { id: 'tab-home', name: '首页', active: true, targetPageId: '', defaultIconUrl: '', activeIconUrl: '' },
+        { id: 'tab-category', name: '分类', active: false, targetPageId: '', defaultIconUrl: '', activeIconUrl: '' },
+        { id: 'tab-cart', name: '购物车', active: false, targetPageId: '', defaultIconUrl: '', activeIconUrl: '' },
+        { id: 'tab-favorites', name: '收藏', active: false, targetPageId: '', defaultIconUrl: '', activeIconUrl: '' },
+        { id: 'tab-mine', name: '我的', active: false, targetPageId: '', defaultIconUrl: '', activeIconUrl: '' },
+      ];
+
+      // ===== 商城设置（全局） =====
+      // 主流主题色预设：红 / 绿 / 黄 / 蓝
+      const THEME_COLORS = [
+        { name: '中国红', value: '#ff4d4f' },
+        { name: '生机绿', value: '#52c41a' },
+        { name: '明亮黄', value: '#faad14' },
+        { name: '经典蓝', value: '#1677ff' },
+      ];
+      const mallSettings = {
+        themeColor: THEME_COLORS[0].value,
+      };
+
+      document.querySelectorAll('.device-switch button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          document.querySelectorAll('.device-switch button').forEach(function (b) { b.classList.remove('active'); });
+          this.classList.add('active');
+          phoneShell.classList.toggle('pc-mode', this.dataset.device === 'pc');
+        });
+      });
+
+      document.querySelectorAll('.editor-side-tab').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          currentPanel = this.dataset.panel || 'pages';
+          const nextGroup = this.dataset.pageGroup;
+
+          document.querySelectorAll('.editor-side-tab').forEach(function (tab) {
+            tab.classList.toggle('active', tab === btn);
+          });
+
+          if (currentPanel === 'pages') {
+            switchPageGroup(nextGroup || 'main');
+            return;
+          }
+          renderSidePanel();
+        });
+      });
+
+      function switchPageGroup(group) {
+        currentPageGroup = group || 'main';
+        // 切换页面组时重置商品分页状态
+        resetGoodsPagination();
+        const visiblePages = pageStore.filter(function (page) { return page.pageType === currentPageGroup; });
+        if (visiblePages.length) {
+          if (!visiblePages.some(function (page) { return page.id === currentPageId; })) {
+            currentPageId = visiblePages[0].id;
+            selectedFloorId = '';
+          }
+        } else {
+          // 子页面为空时：画布保持空白，等待新增页面后再渲染
+          currentPageId = '';
+          selectedFloorId = '';
+        }
+        renderPagesPanel();
+        renderCanvas();
+        renderComponentPropsPanel();
+        renderCanvasSideActions();
+      }
+
+      components.forEach(function (component) {
+        component.previewLabel = '拖拽生成 ' + component.name;
+      });
+
+      function getCurrentPage() {
+        const found = pageStore.find(function (page) { return page.id === currentPageId; });
+        if (found) return found;
+
+        // 当当前分组为空（例如子页面初始为空）时，返回一个空页面对象用于渲染空白画布
+        const visiblePages = pageStore.filter(function (page) { return page.pageType === currentPageGroup; });
+        if (visiblePages.length) return visiblePages[0];
+
+        return {
+          id: '',
+          name: currentPageGroup === 'main' ? '主页面' : '子页面',
+          desc: '',
+          isDefault: false,
+          pageType: currentPageGroup,
+          floors: [],
+        };
+      }
+
+      function getComponentByType(type) {
+        return components.find(function (item) { return item.type === type; }) || components[0];
+      }
+
+      function getCurrentFloor() {
+        return getCurrentPage().floors.find(function (floor) { return floor.id === selectedFloorId; }) || null;
+      }
+
+      /**
+       * 将字符串转义为可安全放入 HTML 属性中的值。
+       * @param {string} value 原始文本
+       * @returns {string}
+       */
+      function escapeHtmlAttr(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/"/g, '&quot;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+      }
+
+      function ensureCategoryBannerConfig(floor) {
+        if (!floor || floor.type !== 'category-showcase') return null;
+        if (!floor.bannerConfig) floor.bannerConfig = {};
+        if (!Array.isArray(floor.bannerConfig.slides) || !floor.bannerConfig.slides.length) {
+          floor.bannerConfig.slides = [
+            {
+              image: '',
+              jumpType: 'none',
+              jumpTarget: '',
+              title: '12·12 年终大促\n数码好物低至 5 折',
+              cta: '立即抢购',
+              emoji: '🎮',
+              bg: 'linear-gradient(135deg, #ff8a80 0%, #ff6a5a 45%, #ff4e3f 100%)',
+            },
+          ];
+        }
+        floor.bannerConfig.slides = floor.bannerConfig.slides.map(function (slide) {
+          return {
+            image: slide.image != null ? String(slide.image) : '',
+            jumpType: slide.jumpType || 'none',
+            jumpTarget: slide.jumpTarget || '',
+            title: slide.title,
+            cta: slide.cta,
+            emoji: slide.emoji,
+            bg: slide.bg,
+          };
+        });
+        if (!floor.bannerConfig.intervalMs || Number.isNaN(Number(floor.bannerConfig.intervalMs))) {
+          floor.bannerConfig.intervalMs = 5000;
+        }
+        if (floor.bannerConfig.radius === undefined || Number.isNaN(Number(floor.bannerConfig.radius))) {
+          floor.bannerConfig.radius = 12;
+        }
+        if (floor.bannerConfig.loop === undefined) {
+          floor.bannerConfig.loop = true;
+        }
+        return floor.bannerConfig;
+      }
+
+      /**
+       * 生成分类页 Banner 多图配置行的 HTML。
+       * @param {Array<{ image?: string, jumpType?: string, jumpTarget?: string }>} slides 轮播项
+       * @returns {string}
+       */
+      function getCategoryBannerRowsMarkup(slides) {
+        return slides
+          .map(function (slide, index) {
+            var imageSelectorHtml = generateImageSelectorHTML({
+              imageUrl: slide.image || '',
+              previewId: 'banner-img-preview-' + index,
+              uploadBtnId: 'banner-upload-btn-' + index,
+              libraryBtnId: 'banner-library-btn-' + index,
+              fileInputId: 'banner-file-input-' + index,
+              tip: ''
+            });
+
+            return (
+              '<div class="category-banner-row" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafafa;">' +
+              '<div class="config-item" style="grid-column:1 / -1;margin-bottom:8px;">' +
+              '<label style="display:block;margin-bottom:6px;">图片 ' +
+              (index + 1) +
+              '</label>' +
+              imageSelectorHtml +
+              '</div>' +
+              generateJumpConfigHTML({
+                jumpType: slide.jumpType || 'none',
+                jumpTarget: slide.jumpTarget || '',
+                typeSelectId: 'banner-jump-type',
+                targetInputId: 'banner-jump-target',
+                index: index,
+                label: '跳转配置'
+              }) +
+              '<button type="button" class="btn btn-danger btn-sm banner-row-remove" data-index="' +
+              index +
+              '">删除此图</button>' +
+              '</div>'
+            );
+          })
+          .join('');
+      }
+
+      function getPagePreviewMarkup(page) {
+        if (page.id === 'page-category-1') {
+          return `
+            <div class="page-preview-block category-showcase">
+              <div class="mini-wrap">
+                <div class="mini-nav">
+                  <span></span>
+                  <span class="active"></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="mini-main">
+                  <div class="mini-banner"></div>
+                  <div class="mini-sec-title"></div>
+                  <div class="mini-sec-grid"><span></span><span></span><span></span><span></span></div>
+                  <div class="mini-sec-title" style="width:48%;"></div>
+                  <div class="mini-third-list"><span></span><span></span><span></span></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        if (page.id === 'page-category-2') {
+          return `
+            <div class="page-preview-block category-showcase category-showcase-page2">
+              <div class="mini-wrap">
+                <div class="mini-nav">
+                  <span class="active"></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="mini-main">
+                  <div class="mini-banner" style="background:linear-gradient(135deg,#ff8a65 0%,#ff7043 100%);"></div>
+                  <div class="mini-sec-grid"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        if (page.id === 'page-category-3') {
+          return `
+            <div class="page-preview-block category-showcase category-showcase-page3">
+              <div class="mini-wrap">
+                <div class="mini-nav">
+                  <span class="active"></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="mini-main">
+                  <div class="mini-p3-tabs"><span></span><span></span><span></span><span></span></div>
+                  <div class="mini-p3-rows">
+                    <div class="row"><i></i><b></b></div>
+                    <div class="row"><i></i><b></b></div>
+                    <div class="row"><i></i><b></b></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        if (page.id === 'page-category-4') {
+          return `
+            <div class="page-preview-block category-showcase category-showcase-page4">
+              <div class="mini-wrap">
+                <div class="mini-main">
+                  <div class="mini-p4-tabs"><span></span><span></span><span></span><span></span><span></span></div>
+                  <div class="mini-p4-rows">
+                    <div class="row"><i></i><b></b></div>
+                    <div class="row"><i></i><b></b></div>
+                    <div class="row"><i></i><b></b></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        if (page.id === 'page-category-5') {
+          return `
+            <div class="page-preview-block category-showcase category-showcase-page5">
+              <div class="mini-wrap">
+                <div class="mini-nav">
+                  <span class="active"></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span><span></span>
+                  <span></span><span></span><span></span>
+                </div>
+                <div class="mini-main">
+                  <div class="mini-p5-rows">
+                    <div class="row"><i></i><b></b></div>
+                    <div class="row"><i></i><b></b></div>
+                    <div class="row"><i></i><b></b></div>
+                    <div class="row"><i></i><b></b></div>
+                    <div class="row"><i></i><b></b></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        if (!page.floors.length) {
+          return '<div class="page-preview-empty">拖拽组件后生成页面预览</div>';
+        }
+        return page.floors.slice(0, 4).map(function (floor) {
+          if (floor.type === 'banner') {
+            return '<div class="page-preview-block banner"></div>';
+          }
+          if (floor.type === 'goods-grid') {
+            return '<div class="page-preview-block goods-grid"><span></span><span></span><span></span><span></span></div>';
+          }
+          if (floor.type === 'rich-text') {
+            return '<div class="page-preview-block rich-text"></div>';
+          }
+          if (floor.type === 'title') {
+            return '<div class="page-preview-block title-block"><span class="title-line"></span><span class="subtitle-line"></span></div>';
+          }
+          if (floor.type === 'text') {
+            return '<div class="page-preview-block text-block"><span class="text-line"></span><span class="text-line"></span><span class="text-line"></span></div>';
+          }
+          if (floor.type === 'link') {
+            return '<div class="page-preview-block link-block"><span class="link-text"></span></div>';
+          }
+          if (floor.type === 'big-bg-image') {
+            return '<div class="page-preview-block big-bg-image-block"></div>';
+          }
+          if (floor.type === 'category-entry') {
+            return '<div class="page-preview-block category-entry"><span></span><span></span><span></span><span></span></div>';
+          }
+          if (floor.type === 'marketing') {
+            return '<div class="page-preview-block marketing"></div>';
+          }
+          if (floor.type === 'search-bar') {
+            return '<div class="page-preview-block search-bar-preview"><div class="search-icon"></div><div class="search-placeholder"></div></div>';
+          }
+          if (floor.type === 'carousel') {
+            return '<div class="page-preview-block carousel-preview"><div class="carousel-dots"><span class="active"></span><span></span><span></span></div></div>';
+          }
+          if (floor.type === 'icon-nav') {
+            return '<div class="page-preview-block icon-nav-preview"><div class="nav-item"><div class="icon-circle"></div><div class="icon-text"></div></div><div class="nav-item"><div class="icon-circle"></div><div class="icon-text"></div></div><div class="nav-item"><div class="icon-circle"></div><div class="icon-text"></div></div><div class="nav-item"><div class="icon-circle"></div><div class="icon-text"></div></div><div class="nav-item"><div class="icon-circle"></div><div class="icon-text"></div></div></div>';
+          }
+          if (floor.type === 'goods-list') {
+            return '<div class="page-preview-block goods-list-preview"><div class="goods-item"><div class="goods-img"></div><div class="goods-info"><div class="goods-title"></div><div class="goods-price"></div></div></div><div class="goods-item"><div class="goods-img"></div><div class="goods-info"><div class="goods-title"></div><div class="goods-price"></div></div></div></div>';
+          }
+          if (floor.type === 'float-button') {
+            return ''; // 悬浮组件不在预览块中显示，而是作为shell上的绝对定位元素
+          }
+          if (floor.type === 'category-showcase') {
+            return `
+              <div class="page-preview-block category-showcase">
+                <div class="mini-wrap">
+                  <div class="mini-nav">
+                    <span></span>
+                    <span class="active"></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <div class="mini-main">
+                    <div class="mini-banner"></div>
+                    <div class="mini-sec-title"></div>
+                    <div class="mini-sec-grid"><span></span><span></span><span></span><span></span></div>
+                    <div class="mini-sec-title" style="width:48%;"></div>
+                    <div class="mini-third-list"><span></span><span></span><span></span></div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }
+          return '<div class="page-preview-block product-detail"><div class="thumb"></div><div class="lines"><span></span><span></span><span style="width:70%;"></span></div></div>';
+        }).join('');
+      }
+
+      function normalizeTabTargets() {
+        const fallbackPageId = (pageStore[0] && pageStore[0].id) || '';
+        tabItems = tabItems.map(function (tab) {
+          const targetExists = pageStore.some(function (page) { return page.id === tab.targetPageId; });
+          return {
+            id: tab.id,
+            name: tab.name,
+            active: tab.active,
+            targetPageId: targetExists ? tab.targetPageId : fallbackPageId,
+            defaultIconUrl: tab.defaultIconUrl,
+            activeIconUrl: tab.activeIconUrl,
+          };
+        });
+      }
+
+      function getPageOptionsMarkup(selectedPageId) {
+        return pageStore.map(function (page) {
+          return `<option value="${page.id}" ${page.id === selectedPageId ? 'selected' : ''}>${page.name}</option>`;
+        }).join('');
+      }
+
+      function getTabPlaceholderSvg(label, color, bgColor) {
+        const svg = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+            <rect x="4" y="4" width="40" height="40" rx="14" fill="${bgColor}" />
+            <text x="24" y="29" text-anchor="middle" font-size="18" font-family="Arial, sans-serif" fill="${color}">${label}</text>
+          </svg>
+        `;
+        return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+      }
+
+      function getTabIconSrc(tab, isActive) {
+        const url = isActive ? tab.activeIconUrl : tab.defaultIconUrl;
+        if (url) return url;
+        const label = (tab.name || '页').slice(0, 1);
+        const color = isActive ? '#ffffff' : '#64748b';
+        const bgColor = isActive ? tabbarConfig.activeColor : '#e2e8f0';
+        return getTabPlaceholderSvg(label, color, bgColor);
+      }
+
+      var orderIconSvgs = {
+        '待付款': '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 10h20"/></svg>',
+        '待发货': '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+        '待收货': '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>',
+        '待评价': '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>',
+        '退换/售后': '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" style="width:24px;height:24px;"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.66 0 3-4.03 3-9s-1.34-9-3-9m0 18c-1.66 0-3-4.03-3-9s1.34-9 3-9m-9 9a9 9 0 019-9"/></svg>'
+      };
+      var menuIconSvgs = {
+        '收货地址': '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6034" stroke-width="2" stroke-linecap="round" style="width:20px;height:20px;flex-shrink:0;margin-right:10px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+        '浏览记录': '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6034" stroke-width="2" stroke-linecap="round" style="width:20px;height:20px;flex-shrink:0;margin-right:10px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+        '卡券绑定': '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6034" stroke-width="2" stroke-linecap="round" style="width:20px;height:20px;flex-shrink:0;margin-right:10px;"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="12" y1="4" x2="12" y2="10"/></svg>',
+        '帮助中心': '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6034" stroke-width="2" stroke-linecap="round" style="width:20px;height:20px;flex-shrink:0;margin-right:10px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+        '意见反馈': '<svg viewBox="0 0 24 24" fill="none" stroke="#ff6034" stroke-width="2" stroke-linecap="round" style="width:20px;height:20px;flex-shrink:0;margin-right:10px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>'
+      };
+
+      function getComponentPropsMarkup(floor) {
+        if (!floor) {
+          return '点击中间画布中的组件后，这里会根据组件类型展示不同属性配置。';
+        }
+        if (floor.type === 'goods-list') {
+          var config = floor.goodsListConfig || {};
+          // 默认值处理
+          var listStyle = config.listStyle || 'large-single';
+          var dataSource = config.dataSource || 'brand';
+          var sortType = config.sortType || 'comprehensive';
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var showSpuName = config.showSpuName !== false;
+          var showSkuSpec = config.showSkuSpec !== false;
+          var showPrice = config.showPrice !== false;
+          var showTag = config.showTag === true;
+          var cartStyle = config.cartStyle || 'style1';
+          var cornerTag = config.cornerTag || 'none';
+          var customCornerTag = config.customCornerTag || '';
+          var goodsCount = config.goodsCount || 20;
+          var priceDisplay = config.priceDisplay || 'price';
+          var showOriginalPrice = config.showOriginalPrice === true;
+          var enableCustomSort = config.enableCustomSort === true;
+          // 边距和边角样式
+          var pagePadding = config.pagePadding || 0;
+          var goodsPadding = config.goodsPadding !== undefined ? config.goodsPadding : 10;
+          var cornerStyle = config.cornerStyle || 'rounded';
+          var goodsCorner = config.goodsCorner || 'rounded';
+
+          // 获取已选择的数据来源名称
+          var selectedNames = '';
+          if (config.selectedItems && config.selectedItems.length > 0) {
+            var items = [];
+            if (config.dataSourceType === 'tag') {
+              items = flattenTreeNodes(MOCK_TAGS);
+            } else if (config.dataSourceType === 'brand') {
+              items = MOCK_BRANDS;
+            } else if (config.dataSourceType === 'category') {
+              items = flattenTreeNodes(MOCK_CATEGORIES);
+            } else if (config.dataSourceType === 'product') {
+              items = MOCK_GOODS_DATA.slice(0, 30).map(function(g) { return { id: g.id, name: g.name }; });
+            }
+            selectedNames = config.selectedItems.map(function(id) {
+              var item = items.find(function(i) { return i.id === id; });
+              return item ? item.name : '';
+            }).filter(function(n) { return n; }).join('、');
+          }
+          var sourceTypeTextMap = {
+            'brand': '品牌',
+            'tag': '标签',
+            'category': '分类',
+            'product': '商品'
+          };
+          var sourceTypeText = sourceTypeTextMap[config.dataSourceType] || '品牌';
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">列表样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>选择列表样式</label>' +
+                  '<select id="goods-list-style">' +
+                    '<option value="large-single" ' + (listStyle === 'large-single' ? 'selected' : '') + '>大图单列</option>' +
+                    '<option value="small-double" ' + (listStyle === 'small-double' ? 'selected' : '') + '>小图两列</option>' +
+                    '<option value="detail-list" ' + (listStyle === 'detail-list' ? 'selected' : '') + '>详细列表</option>' +
+                    '<option value="small-triple" ' + (listStyle === 'small-triple' ? 'selected' : '') + '>小图三列</option>' +
+                    '<option value="one-large-two-small" ' + (listStyle === 'one-large-two-small' ? 'selected' : '') + '>一大两小（左一右二）</option>' +
+                    '<option value="horizontal-scroll" ' + (listStyle === 'horizontal-scroll' ? 'selected' : '') + '>横向滑动</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">数据来源</div>' +
+              '<p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">配置商品列表的数据来源，支持品牌、标签、分类和单品选择。</p>' +
+              '<div class="config-item" style="grid-column:1 / -1;">' +
+                '<label>商品数据来源</label>' +
+                '<div style="display:flex;gap:8px;align-items:center;">' +
+                  '<div style="flex:1;padding:8px 12px;background:#fff;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text-secondary);min-height:34px;display:flex;align-items:center;">' +
+                    (selectedNames ? '<span style="color:var(--primary);">' + sourceTypeText + '：' + selectedNames + '</span>' : '<span style="color:var(--text-muted);">未配置，点击右侧按钮配置</span>') +
+                  '</div>' +
+                  '<button type="button" class="btn btn-primary btn-sm" id="goods-list-config-source-btn" data-floor-id="' + floor.id + '" style="height:34px;white-space:nowrap;">配置</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">样式设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="goods-bg-color" value="' + backgroundColor + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>组件边角样式</label>' +
+                  '<select id="goods-corner-style">' +
+                    '<option value="rounded" ' + (cornerStyle === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (cornerStyle === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="goods-page-padding" min="0" max="30" value="' + pagePadding + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>商品间距(px)</label>' +
+                  '<input type="number" id="goods-padding" min="0" max="20" value="' + goodsPadding + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>商品卡片倒角</label>' +
+                  '<select id="goods-goods-corner">' +
+                    '<option value="rounded" ' + (goodsCorner === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (goodsCorner === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">商品属性设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>显示SPU商品名称</label>' +
+                  '<select id="goods-show-spu">' +
+                    '<option value="true" ' + (showSpuName ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showSpuName ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示SKU规格值</label>' +
+                  '<select id="goods-show-sku">' +
+                    '<option value="true" ' + (showSkuSpec ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showSkuSpec ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示销售价</label>' +
+                  '<select id="goods-show-price">' +
+                    '<option value="true" ' + (showPrice ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showPrice ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示标签</label>' +
+                  '<select id="goods-show-tag">' +
+                    '<option value="true" ' + (showTag ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showTag ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>购物车样式</label>' +
+                  '<select id="goods-cart-style">' +
+                    '<option value="style1" ' + (cartStyle === 'style1' ? 'selected' : '') + '>icon1:购物车样式1</option>' +
+                    '<option value="style2" ' + (cartStyle === 'style2' ? 'selected' : '') + '>icon2:购物车样式2</option>' +
+                    '<option value="style3" ' + (cartStyle === 'style3' ? 'selected' : '') + '>icon3:购物车样式3</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>角标类型</label>' +
+                  '<select id="goods-corner-tag">' +
+                    '<option value="none" ' + (cornerTag === 'none' ? 'selected' : '') + '>无</option>' +
+                    '<option value="new" ' + (cornerTag === 'new' ? 'selected' : '') + '>新品</option>' +
+                    '<option value="hot" ' + (cornerTag === 'hot' ? 'selected' : '') + '>爆款</option>' +
+                    '<option value="sale" ' + (cornerTag === 'sale' ? 'selected' : '') + '>特价</option>' +
+                    '<option value="group" ' + (cornerTag === 'group' ? 'selected' : '') + '>拼团</option>' +
+                    '<option value="seckill" ' + (cornerTag === 'seckill' ? 'selected' : '') + '>秒杀</option>' +
+                    '<option value="custom" ' + (cornerTag === 'custom' ? 'selected' : '') + '>自定义</option>' +
+                  '</select>' +
+                '</div>' +
+                (cornerTag === 'custom' ? '<div class="config-item" style="grid-column:1 / -1;"><label>自定义角标文字</label><input type="text" id="goods-custom-corner" value="' + customCornerTag + '" placeholder="输入自定义角标文字" /></div>' : '') +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">价格显示设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>价格显示类型</label>' +
+                  '<select id="goods-price-display">' +
+                    '<option value="price" ' + (priceDisplay === 'price' ? 'selected' : '') + '>显示商品价格</option>' +
+                    '<option value="points" ' + (priceDisplay === 'points' ? 'selected' : '') + '>显示积分</option>' +
+                    '<option value="price-points" ' + (priceDisplay === 'price-points' ? 'selected' : '') + '>显示价格+积分</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示划线价</label>' +
+                  '<select id="goods-show-original">' +
+                    '<option value="true" ' + (showOriginalPrice ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showOriginalPrice ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        if (floor.type === 'title') {
+          var config = floor.titleConfig || {};
+          var title = config.title || '标题文字';
+          var subtitle = config.subtitle || '';
+          var align = config.align || 'left';
+          var titleSize = config.titleSize || 18;
+          var titleColor = config.titleColor || '#333333';
+          var titleWeight = config.titleWeight || 'bold';
+          var subtitleSize = config.subtitleSize || 13;
+          var subtitleColor = config.subtitleColor || '#8c8c8c';
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var paddingTop = config.paddingTop !== undefined ? config.paddingTop : 14;
+          var paddingBottom = config.paddingBottom !== undefined ? config.paddingBottom : 14;
+          var paddingLeft = config.paddingLeft !== undefined ? config.paddingLeft : 14;
+          var paddingRight = config.paddingRight !== undefined ? config.paddingRight : 14;
+          var cornerStyle = config.cornerStyle || 'rounded';
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">标题内容</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>标题文字</label>' +
+                  '<input type="text" id="title-content" value="' + title + '" placeholder="输入标题内容" style="width:100%;" />' +
+                '</div>' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>副标题/描述（可选）</label>' +
+                  '<input type="text" id="title-subtitle" value="' + subtitle + '" placeholder="输入副标题或描述文字" style="width:100%;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>对齐方式</label>' +
+                  '<select id="title-align">' +
+                    '<option value="left" ' + (align === 'left' ? 'selected' : '') + '>左对齐</option>' +
+                    '<option value="center" ' + (align === 'center' ? 'selected' : '') + '>居中</option>' +
+                    '<option value="right" ' + (align === 'right' ? 'selected' : '') + '>右对齐</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">标题样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>标题字号</label>' +
+                  '<select id="title-size">' +
+                    '<option value="14" ' + (titleSize === 14 ? 'selected' : '') + '>14px</option>' +
+                    '<option value="16" ' + (titleSize === 16 ? 'selected' : '') + '>16px</option>' +
+                    '<option value="18" ' + (titleSize === 18 ? 'selected' : '') + '>18px</option>' +
+                    '<option value="20" ' + (titleSize === 20 ? 'selected' : '') + '>20px</option>' +
+                    '<option value="24" ' + (titleSize === 24 ? 'selected' : '') + '>24px</option>' +
+                    '<option value="28" ' + (titleSize === 28 ? 'selected' : '') + '>28px</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>标题颜色</label>' +
+                  '<input type="color" id="title-color" value="' + titleColor + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>标题粗细</label>' +
+                  '<select id="title-weight">' +
+                    '<option value="bold" ' + (titleWeight === 'bold' ? 'selected' : '') + '>加粗</option>' +
+                    '<option value="normal" ' + (titleWeight === 'normal' ? 'selected' : '') + '>常规</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">副标题样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>副标题字号</label>' +
+                  '<select id="title-subtitle-size">' +
+                    '<option value="12" ' + (subtitleSize === 12 ? 'selected' : '') + '>12px</option>' +
+                    '<option value="13" ' + (subtitleSize === 13 ? 'selected' : '') + '>13px</option>' +
+                    '<option value="14" ' + (subtitleSize === 14 ? 'selected' : '') + '>14px</option>' +
+                    '<option value="15" ' + (subtitleSize === 15 ? 'selected' : '') + '>15px</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>副标题颜色</label>' +
+                  '<input type="color" id="title-subtitle-color" value="' + subtitleColor + '" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">背景与边距</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="title-bg-color" value="' + backgroundColor + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>上边距(px)</label>' +
+                  '<input type="number" id="title-padding-top" value="' + paddingTop + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>下边距(px)</label>' +
+                  '<input type="number" id="title-padding-bottom" value="' + paddingBottom + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>左边距(px)</label>' +
+                  '<input type="number" id="title-padding-left" value="' + paddingLeft + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>右边距(px)</label>' +
+                  '<input type="number" id="title-padding-right" value="' + paddingRight + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>边角样式</label>' +
+                  '<select id="title-corner-style">' +
+                    '<option value="rounded" ' + (cornerStyle === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (cornerStyle === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        if (floor.type === 'big-bg-image') {
+          var config = floor.bigBgImageConfig || {};
+          var backgroundImage = config.backgroundImage || '';
+          var backgroundColor = config.backgroundColor || '#f5f5f5';
+          var backgroundSize = config.backgroundSize || 'cover';
+          var backgroundPosition = config.backgroundPosition || 'center';
+          var backgroundRepeat = config.backgroundRepeat || 'no-repeat';
+          var height = config.height || 200;
+          var content = config.content || '';
+          var contentColor = config.contentColor || '#ffffff';
+          var jumpType = config.jumpType || 'none';
+          var jumpTarget = config.jumpTarget || '';
+          var pagePadding = config.pagePadding || 0;
+
+          var imageSelectorHtml = generateImageSelectorHTML({
+            imageUrl: backgroundImage,
+            previewId: 'bg-img-preview',
+            uploadBtnId: 'bg-img-upload-btn',
+            libraryBtnId: 'bg-img-library-btn',
+            fileInputId: 'bg-img-file-input',
+            tip: '建议使用高清大图作为背景'
+          });
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">背景设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>背景图片</label>' +
+                  imageSelectorHtml +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="bg-img-color" value="' + backgroundColor + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>组件高度(px)</label>' +
+                  '<input type="number" id="bg-img-height" value="' + height + '" min="50" max="600" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>图片填充方式</label>' +
+                  '<select id="bg-img-size">' +
+                    '<option value="cover" ' + (backgroundSize === 'cover' ? 'selected' : '') + '>覆盖</option>' +
+                    '<option value="contain" ' + (backgroundSize === 'contain' ? 'selected' : '') + '>包含</option>' +
+                    '<option value="auto" ' + (backgroundSize === 'auto' ? 'selected' : '') + '>原始尺寸</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>图片位置</label>' +
+                  '<select id="bg-img-position">' +
+                    '<option value="center" ' + (backgroundPosition === 'center' ? 'selected' : '') + '>居中</option>' +
+                    '<option value="top" ' + (backgroundPosition === 'top' ? 'selected' : '') + '>顶部</option>' +
+                    '<option value="bottom" ' + (backgroundPosition === 'bottom' ? 'selected' : '') + '>底部</option>' +
+                    '<option value="left" ' + (backgroundPosition === 'left' ? 'selected' : '') + '>左侧</option>' +
+                    '<option value="right" ' + (backgroundPosition === 'right' ? 'selected' : '') + '>右侧</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>图片重复</label>' +
+                  '<select id="bg-img-repeat">' +
+                    '<option value="no-repeat" ' + (backgroundRepeat === 'no-repeat' ? 'selected' : '') + '>不重复</option>' +
+                    '<option value="repeat" ' + (backgroundRepeat === 'repeat' ? 'selected' : '') + '>平铺</option>' +
+                    '<option value="repeat-x" ' + (backgroundRepeat === 'repeat-x' ? 'selected' : '') + '>水平重复</option>' +
+                    '<option value="repeat-y" ' + (backgroundRepeat === 'repeat-y' ? 'selected' : '') + '>垂直重复</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">叠加内容（可选）</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>叠加文字</label>' +
+                  '<input type="text" id="bg-img-content" value="' + content + '" placeholder="在背景图上叠加显示的文字" style="width:100%;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>文字颜色</label>' +
+                  '<input type="color" id="bg-img-content-color" value="' + contentColor + '" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">点击跳转（可选）</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  generateJumpConfigHTML({
+                    jumpType: jumpType,
+                    jumpTarget: jumpTarget,
+                    typeSelectId: 'bg-img-jump-type',
+                    targetInputId: 'bg-img-jump-target',
+                    index: 0,
+                    label: '跳转配置'
+                  }) +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">页面边距</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="bg-img-page-padding" value="' + pagePadding + '" min="0" max="30" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        if (floor.type === 'text') {
+          var config = floor.textConfig || {};
+          var content = config.content || '在此输入文本内容...';
+          var align = config.align || 'left';
+          var fontSize = config.fontSize || 14;
+          var fontColor = config.fontColor || '#333333';
+          var fontWeight = config.fontWeight || 'normal';
+          var lineHeight = config.lineHeight || 1.6;
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var paddingTop = config.paddingTop !== undefined ? config.paddingTop : 12;
+          var paddingBottom = config.paddingBottom !== undefined ? config.paddingBottom : 12;
+          var paddingLeft = config.paddingLeft !== undefined ? config.paddingLeft : 14;
+          var paddingRight = config.paddingRight !== undefined ? config.paddingRight : 14;
+          var cornerStyle = config.cornerStyle || 'rounded';
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">文本内容</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>文本内容</label>' +
+                  '<textarea id="text-content" style="width:100%;min-height:80px;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;resize:vertical;line-height:1.6;" placeholder="输入文本内容...">' + content + '</textarea>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>对齐方式</label>' +
+                  '<select id="text-align">' +
+                    '<option value="left" ' + (align === 'left' ? 'selected' : '') + '>左对齐</option>' +
+                    '<option value="center" ' + (align === 'center' ? 'selected' : '') + '>居中</option>' +
+                    '<option value="right" ' + (align === 'right' ? 'selected' : '') + '>右对齐</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">文本样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>字体大小</label>' +
+                  '<select id="text-font-size">' +
+                    '<option value="12" ' + (fontSize === 12 ? 'selected' : '') + '>12px</option>' +
+                    '<option value="13" ' + (fontSize === 13 ? 'selected' : '') + '>13px</option>' +
+                    '<option value="14" ' + (fontSize === 14 ? 'selected' : '') + '>14px</option>' +
+                    '<option value="15" ' + (fontSize === 15 ? 'selected' : '') + '>15px</option>' +
+                    '<option value="16" ' + (fontSize === 16 ? 'selected' : '') + '>16px</option>' +
+                    '<option value="18" ' + (fontSize === 18 ? 'selected' : '') + '>18px</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>文字颜色</label>' +
+                  '<input type="color" id="text-font-color" value="' + fontColor + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>字体粗细</label>' +
+                  '<select id="text-font-weight">' +
+                    '<option value="normal" ' + (fontWeight === 'normal' ? 'selected' : '') + '>常规</option>' +
+                    '<option value="bold" ' + (fontWeight === 'bold' ? 'selected' : '') + '>加粗</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>行高</label>' +
+                  '<select id="text-line-height">' +
+                    '<option value="1.4" ' + (lineHeight === 1.4 ? 'selected' : '') + '>1.4</option>' +
+                    '<option value="1.5" ' + (lineHeight === 1.5 ? 'selected' : '') + '>1.5</option>' +
+                    '<option value="1.6" ' + (lineHeight === 1.6 ? 'selected' : '') + '>1.6</option>' +
+                    '<option value="1.8" ' + (lineHeight === 1.8 ? 'selected' : '') + '>1.8</option>' +
+                    '<option value="2" ' + (lineHeight === 2 ? 'selected' : '') + '>2.0</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">背景与边距</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="text-bg-color" value="' + backgroundColor + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>上边距(px)</label>' +
+                  '<input type="number" id="text-padding-top" value="' + paddingTop + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>下边距(px)</label>' +
+                  '<input type="number" id="text-padding-bottom" value="' + paddingBottom + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>左边距(px)</label>' +
+                  '<input type="number" id="text-padding-left" value="' + paddingLeft + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>右边距(px)</label>' +
+                  '<input type="number" id="text-padding-right" value="' + paddingRight + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>边角样式</label>' +
+                  '<select id="text-corner-style">' +
+                    '<option value="rounded" ' + (cornerStyle === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (cornerStyle === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        if (floor.type === 'link') {
+          var config = floor.linkConfig || {};
+          var text = config.text || '点击跳转';
+          var icon = config.icon || '';
+          var linkType = config.linkType || 'page';
+          var linkUrl = config.linkUrl || '';
+          var targetPageId = config.targetPageId || '';
+          var textColor = config.textColor || '#1677ff';
+          var fontSize = config.fontSize || 14;
+          var textDecoration = config.textDecoration || 'underline';
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var paddingTop = config.paddingTop !== undefined ? config.paddingTop : 10;
+          var paddingBottom = config.paddingBottom !== undefined ? config.paddingBottom : 10;
+          var paddingLeft = config.paddingLeft !== undefined ? config.paddingLeft : 14;
+          var paddingRight = config.paddingRight !== undefined ? config.paddingRight : 14;
+          var cornerStyle = config.cornerStyle || 'rounded';
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">链接内容</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>链接文字</label>' +
+                  '<input type="text" id="link-text" value="' + text + '" placeholder="输入显示的链接文字" style="width:100%;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>链接类型</label>' +
+                  '<select id="link-type">' +
+                    '<option value="page" ' + (linkType === 'page' ? 'selected' : '') + '>内部页面</option>' +
+                    '<option value="external" ' + (linkType === 'external' ? 'selected' : '') + '>外部链接</option>' +
+                    '<option value="tel" ' + (linkType === 'tel' ? 'selected' : '') + '>拨打电话</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>链接地址</label>' +
+                  '<input type="text" id="link-url" value="' + linkUrl + '" placeholder="输入链接地址或页面路径" style="width:100%;" />' +
+                  '<p style="font-size:11px;color:var(--text-muted);margin:4px 0 0;">内部页面填写页面路径，外部链接填写完整URL，电话填写tel:号码</p>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">样式设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>文字颜色</label>' +
+                  '<input type="color" id="link-text-color" value="' + textColor + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>字体大小</label>' +
+                  '<select id="link-font-size">' +
+                    '<option value="12" ' + (fontSize === 12 ? 'selected' : '') + '>12px</option>' +
+                    '<option value="13" ' + (fontSize === 13 ? 'selected' : '') + '>13px</option>' +
+                    '<option value="14" ' + (fontSize === 14 ? 'selected' : '') + '>14px</option>' +
+                    '<option value="15" ' + (fontSize === 15 ? 'selected' : '') + '>15px</option>' +
+                    '<option value="16" ' + (fontSize === 16 ? 'selected' : '') + '>16px</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>下划线</label>' +
+                  '<select id="link-text-decoration">' +
+                    '<option value="none" ' + (textDecoration === 'none' ? 'selected' : '') + '>无</option>' +
+                    '<option value="underline" ' + (textDecoration === 'underline' ? 'selected' : '') + '>下划线</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">背景与边距</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="link-bg-color" value="' + backgroundColor + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>上边距(px)</label>' +
+                  '<input type="number" id="link-padding-top" value="' + paddingTop + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>下边距(px)</label>' +
+                  '<input type="number" id="link-padding-bottom" value="' + paddingBottom + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>左边距(px)</label>' +
+                  '<input type="number" id="link-padding-left" value="' + paddingLeft + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>右边距(px)</label>' +
+                  '<input type="number" id="link-padding-right" value="' + paddingRight + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>边角样式</label>' +
+                  '<select id="link-corner-style">' +
+                    '<option value="rounded" ' + (cornerStyle === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (cornerStyle === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        // 轮播图组件配置面板
+        if (floor.type === 'carousel') {
+          var config = floor.carouselConfig || {};
+          // 确保 slides 数组存在
+          if (!Array.isArray(config.slides) || config.slides.length === 0) {
+            config.slides = [
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+            ];
+          }
+          var slides = config.slides;
+          var styleMode = config.styleMode || 'standard';
+          var height = config.height || 180;
+          var imageCorner = config.imageCorner || 'rounded';
+          var cornerStyle = config.cornerStyle || 'rounded';
+          var autoplay = config.autoplay !== false;
+          var interval = config.interval || 3000;
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var dotStyle = config.dotStyle || 'round'; // round 圆形, bar 长条形
+          var dotPosition = config.dotPosition || 'bottom'; // bottom 底部, inside 内嵌
+          var pagePadding = config.pagePadding || 0;
+
+          // 生成图片列表HTML
+          var slidesRowsHtml = slides.map(function(slide, index) {
+            var imageSelectorHtml = generateImageSelectorHTML({
+              imageUrl: slide.image || '',
+              previewId: 'carousel-img-preview-' + index,
+              uploadBtnId: 'carousel-upload-btn-' + index,
+              libraryBtnId: 'carousel-library-btn-' + index,
+              fileInputId: 'carousel-file-input-' + index,
+              tip: '建议尺寸：750 × 360px'
+            });
+
+            return '<div class="carousel-slide-row" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafafa;">' +
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                '<span style="font-size:13px;font-weight:500;color:var(--text);">图片 ' + (index + 1) + '</span>' +
+                (slides.length > 1 ? '<button type="button" class="btn btn-danger btn-sm carousel-slide-remove" data-index="' + index + '" style="padding:2px 8px;">删除</button>' : '') +
+              '</div>' +
+              '<div style="margin-bottom:8px;">' +
+                '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">轮播图片</label>' +
+                imageSelectorHtml +
+              '</div>' +
+              generateJumpConfigHTML({
+                jumpType: slide.jumpType || 'none',
+                jumpTarget: slide.jumpTarget || '',
+                typeSelectId: 'carousel-jump-type',
+                targetInputId: 'carousel-jump-target',
+                index: index,
+                label: '跳转配置'
+              }) +
+            '</div>';
+          }).join('');
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">风格设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>轮播风格</label>' +
+                  '<select id="carousel-style-mode" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="standard" ' + (styleMode === 'standard' ? 'selected' : '') + '>标准</option>' +
+                    '<option value="immersive" ' + (styleMode === 'immersive' ? 'selected' : '') + '>沉浸式</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">图片配置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<div id="carousel-slides-container">' + slidesRowsHtml + '</div>' +
+                  '<button type="button" class="btn btn-primary btn-sm" id="carousel-add-slide" style="margin-top:6px;">+ 添加图片</button>' +
+                  '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;">支持多张图片轮播；仅一张时不轮播。可粘贴图片URL或点击「选择文件」上传本地图。</p>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">图片样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>图片边角</label>' +
+                  '<select id="carousel-image-corner" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="rounded" ' + (imageCorner === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (imageCorner === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>容器边角</label>' +
+                  '<select id="carousel-corner-style" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="rounded" ' + (cornerStyle === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (cornerStyle === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">轮播设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>自动轮播</label>' +
+                  '<select id="carousel-autoplay" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="true" ' + (autoplay ? 'selected' : '') + '>开启</option>' +
+                    '<option value="false" ' + (!autoplay ? 'selected' : '') + '>关闭</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>轮播间隔(ms)</label>' +
+                  '<input type="number" id="carousel-interval" value="' + interval + '" min="1000" max="10000" step="500" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>圆点样式</label>' +
+                  '<select id="carousel-dot-style" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="round" ' + (dotStyle === 'round' ? 'selected' : '') + '>圆形</option>' +
+                    '<option value="bar" ' + (dotStyle === 'bar' ? 'selected' : '') + '>长条形</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>圆点位置</label>' +
+                  '<select id="carousel-dot-position" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="bottom" ' + (dotPosition === 'bottom' ? 'selected' : '') + '>底部</option>' +
+                    '<option value="inside" ' + (dotPosition === 'inside' ? 'selected' : '') + '>内嵌</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">背景设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="carousel-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="carousel-page-padding" value="' + pagePadding + '" min="0" max="30" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        // 图文导航组件配置面板
+        if (floor.type === 'icon-nav') {
+          var config = floor.iconNavConfig || {};
+          var template = config.template || 'image-nav';
+          var layoutStyle = config.layoutStyle || 'fixed';
+          var displayCount = config.displayCount || 5;
+          var navItems = config.navItems || [];
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var textColor = config.textColor || '#333333';
+          var textSize = config.textSize || 12;
+          var pagePadding = config.pagePadding || 0;
+          var cornerStyle = config.cornerStyle || 'rounded';
+          var imageCorner = config.imageCorner || 'rounded';
+
+          // 确保 navItems 至少有5个
+          if (navItems.length < 5) {
+            while (navItems.length < 5) {
+              navItems.push({ icon: '📌', image: '', text: '导航' + (navItems.length + 1), jumpType: 'none', jumpTarget: '' });
+            }
+          }
+
+          // 生成导航项列表HTML
+          var navItemsHtml = navItems.map(function(item, index) {
+            var imageSelectorHtml = generateImageSelectorHTML({
+              imageUrl: item.image || '',
+              previewId: 'icon-nav-img-preview-' + index,
+              uploadBtnId: 'icon-nav-upload-btn-' + index,
+              libraryBtnId: 'icon-nav-library-btn-' + index,
+              fileInputId: 'icon-nav-file-input-' + index,
+              tip: '图片优先于图标显示'
+            });
+
+            return '' +
+              '<div class="icon-nav-item-row" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafafa;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                  '<span style="font-size:13px;font-weight:500;color:var(--text);">导航项 ' + (index + 1) + '</span>' +
+                  (navItems.length > 4 ? '<button type="button" class="btn btn-danger btn-sm icon-nav-item-remove" data-index="' + index + '" style="padding:2px 8px;">删除</button>' : '') +
+                '</div>' +
+                '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+                  '<div style="flex:1;">' +
+                    '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">图标（emoji或URL）</label>' +
+                    '<input type="text" class="icon-nav-item-icon" data-index="' + index + '" value="' + (item.icon || '') + '" placeholder="输入emoji或图片URL" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                  '</div>' +
+                  '<div style="flex:1;">' +
+                    '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">文字</label>' +
+                    '<input type="text" class="icon-nav-item-text" data-index="' + index + '" value="' + (item.text || '') + '" placeholder="导航文字" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                  '</div>' +
+                '</div>' +
+                '<div style="margin-bottom:8px;">' +
+                  '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">图片（可选，优先显示图片）</label>' +
+                  imageSelectorHtml +
+                '</div>' +
+                generateJumpConfigHTML({
+                  jumpType: item.jumpType || 'none',
+                  jumpTarget: item.jumpTarget || '',
+                  typeSelectId: 'icon-nav-jump-type',
+                  targetInputId: 'icon-nav-jump-target',
+                  index: index,
+                  label: '跳转配置'
+                }) +
+              '</div>';
+          }).join('');
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">模板设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>选择模板</label>' +
+                  '<select id="icon-nav-template" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="image-nav" ' + (template === 'image-nav' ? 'selected' : '') + '>图片导航</option>' +
+                    '<option value="text-nav" ' + (template === 'text-nav' ? 'selected' : '') + '>文字导航</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>布局样式</label>' +
+                  '<select id="icon-nav-layout" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="fixed" ' + (layoutStyle === 'fixed' ? 'selected' : '') + '>固定</option>' +
+                    '<option value="scroll" ' + (layoutStyle === 'scroll' ? 'selected' : '') + '>横向滑动</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item" id="icon-nav-rows-wrapper" ' + (layoutStyle === 'scroll' ? 'style="display:none;"' : '') + '>' +
+                  '<label>显示行数</label>' +
+                  '<select id="icon-nav-rows" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="1" ' + ((config.rows || 1) === 1 ? 'selected' : '') + '>一行</option>' +
+                    '<option value="2" ' + ((config.rows || 1) === 2 ? 'selected' : '') + '>两行</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">导航项配置 <span style="font-weight:normal;color:var(--text-muted);font-size:12px;">（最多12个，当前' + navItems.length + '个）</span></div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<div id="icon-nav-items-container">' + navItemsHtml + '</div>' +
+                  (navItems.length >= 12 ? '<p style="font-size:12px;color:var(--text-muted);margin-top:6px;">已达到最大数量限制（12个）</p>' : '<button type="button" class="btn btn-primary btn-sm" id="icon-nav-add-item" style="margin-top:6px;">+ 添加导航项</button>') +
+                  '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;">可添加图标（emoji或图片URL）和文字，点击后跳转到对应链接。</p>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">样式设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="icon-nav-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>文字颜色</label>' +
+                  '<input type="color" id="icon-nav-text-color" value="' + textColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>文字大小</label>' +
+                  '<select id="icon-nav-text-size" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="10" ' + (textSize === 10 ? 'selected' : '') + '>10px</option>' +
+                    '<option value="12" ' + (textSize === 12 ? 'selected' : '') + '>12px</option>' +
+                    '<option value="14" ' + (textSize === 14 ? 'selected' : '') + '>14px</option>' +
+                    '<option value="16" ' + (textSize === 16 ? 'selected' : '') + '>16px</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>容器边角</label>' +
+                  '<select id="icon-nav-corner-style" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="rounded" ' + (cornerStyle === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (cornerStyle === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>图片边角</label>' +
+                  '<select id="icon-nav-image-corner" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="rounded" ' + (imageCorner === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (imageCorner === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="icon-nav-page-padding" min="0" max="30" value="' + pagePadding + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        // 悬浮组件配置面板
+        if (floor.type === 'float-button') {
+          var config = floor.floatButtonConfig || {};
+          var position = config.position || 'right';
+          var bottomMargin = config.bottomMargin || 80;
+          var buttonGap = config.buttonGap || 12;
+          var buttons = config.buttons || [];
+
+          // 确保至少有一个置顶按钮
+          if (buttons.length === 0) {
+            buttons = [{ id: 'btn-' + Date.now(), type: 'back-top', enabled: true, name: '置顶', backgroundColor: '#ff6b35', iconColor: '#ffffff', buttonSize: 44, borderRadius: 50, jumpType: 'none', jumpTarget: '' }];
+          }
+
+          // 生成按钮配置列表HTML
+          var buttonsListHtml = buttons.map(function(btn, index) {
+            var btnType = btn.type || 'back-top';
+            var btnName = btn.name || (btnType === 'back-top' ? '置顶' : btnType === 'cart' ? '购物车' : '客服');
+            var bgColor = btn.backgroundColor || '#ff6b35';
+            var iconColor = btn.iconColor || '#ffffff';
+            var btnSize = btn.buttonSize || 44;
+            var btnRadius = btn.borderRadius !== undefined ? btn.borderRadius : 50;
+            var jumpType = btn.jumpType || 'none';
+            var jumpTarget = btn.jumpTarget || '';
+
+            // 跳转配置HTML（置顶按钮不需要跳转配置）
+            var jumpConfigHtml = btnType === 'back-top' ? '' : generateJumpConfigHTML({
+              jumpType: jumpType,
+              jumpTarget: jumpTarget,
+              typeSelectId: 'float-btn-jump-type',
+              targetInputId: 'float-btn-jump-target',
+              index: index,
+              label: '跳转配置'
+            });
+
+            return '' +
+              '<div class="float-btn-row" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafafa;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                  '<span style="font-size:13px;font-weight:500;color:var(--text);">按钮 ' + (index + 1) + '</span>' +
+                  (buttons.length > 1 ? '<button type="button" class="btn btn-danger btn-sm float-btn-remove" data-index="' + index + '" style="padding:2px 8px;">删除</button>' : '') +
+                '</div>' +
+                '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+                  '<div style="flex:1;">' +
+                    '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">按钮类型</label>' +
+                    '<select class="float-btn-type" data-index="' + index + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                      '<option value="back-top" ' + (btnType === 'back-top' ? 'selected' : '') + '>置顶</option>' +
+                      '<option value="cart" ' + (btnType === 'cart' ? 'selected' : '') + '>购物车</option>' +
+                      '<option value="service" ' + (btnType === 'service' ? 'selected' : '') + '>客服</option>' +
+                    '</select>' +
+                  '</div>' +
+                  '<div style="flex:1;">' +
+                    '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">名称</label>' +
+                    '<input type="text" class="float-btn-name" data-index="' + index + '" value="' + btnName + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                  '</div>' +
+                '</div>' +
+                '<div style="display:flex;gap:8px;margin-bottom:8px;">' +
+                  '<div style="flex:1;">' +
+                    '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">背景颜色</label>' +
+                    '<input type="color" class="float-btn-bg-color" data-index="' + index + '" value="' + bgColor + '" style="width:100%;height:32px;" />' +
+                  '</div>' +
+                  '<div style="flex:1;">' +
+                    '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">图标颜色</label>' +
+                    '<input type="color" class="float-btn-icon-color" data-index="' + index + '" value="' + iconColor + '" style="width:100%;height:32px;" />' +
+                  '</div>' +
+                  '<div style="flex:1;">' +
+                    '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">大小(px)</label>' +
+                    '<input type="number" class="float-btn-size" data-index="' + index + '" value="' + btnSize + '" min="32" max="60" step="2" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                  '</div>' +
+                  '<div style="flex:1;">' +
+                    '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">圆角(%)</label>' +
+                    '<input type="number" class="float-btn-radius" data-index="' + index + '" value="' + btnRadius + '" min="0" max="50" step="2" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                  '</div>' +
+                '</div>' +
+                jumpConfigHtml +
+              '</div>';
+          }).join('');
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">位置设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>悬浮位置</label>' +
+                  '<select id="float-position" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="left" ' + (position === 'left' ? 'selected' : '') + '>左侧</option>' +
+                    '<option value="right" ' + (position === 'right' ? 'selected' : '') + '>右侧</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>距底部距离(px)</label>' +
+                  '<input type="number" id="float-bottom-margin" value="' + bottomMargin + '" min="50" max="200" step="5" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                  '<p style="font-size:11px;color:var(--text-muted);margin-top:4px;">需考虑底部导航栏高度</p>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>按钮间距(px)</label>' +
+                  '<input type="number" id="float-button-gap" value="' + buttonGap + '" min="8" max="24" step="2" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">按钮配置</div>' +
+              '<div id="float-buttons-list">' + buttonsListHtml + '</div>' +
+              (buttons.length < 3 ? '<button type="button" class="btn btn-primary btn-sm" id="float-add-btn" style="margin-top:6px;">+ 添加按钮</button>' : '') +
+              '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;">最多支持3个悬浮按钮（置顶、购物车、客服）</p>' +
+            '</div>';
+        }
+        // 电梯导航组件配置面板
+        if (floor.type === 'elevator-nav') {
+          var config = floor.elevatorNavConfig || {};
+          var templateType = config.templateType || 'text';
+          var displayMode = config.displayMode || 'scroll';
+          var tagStyle = config.tagStyle || 'underline';
+          var activeBgColor = config.activeBgColor || '#ff6b35';
+          var activeTextColor = config.activeTextColor || '#ff6b35';
+          var defaultBgColor = config.defaultBgColor || '#ffffff';
+          var defaultTextColor = config.defaultTextColor || '#333333';
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var tags = config.tags || [];
+          var activeIndex = config.activeIndex || 0;
+          var pagePadding = config.pagePadding || 0;
+          var enableSticky = config.enableSticky || false;
+          var stickyTop = config.stickyTop || 0;
+
+          // 确保 tags 至少有4个
+          if (tags.length < 4) {
+            while (tags.length < 4) {
+              tags.push({ text: '标签' + (tags.length + 1), image: '', targetFloorId: '' });
+            }
+          }
+
+          // 获取当前页面的所有组件列表（用于下拉选择）
+          var currentPage = getCurrentPage();
+          var allFloors = currentPage && currentPage.floors ? currentPage.floors : [];
+          var floorOptionsHtml = '<option value="">请选择组件</option>';
+          allFloors.forEach(function(f) {
+            if (f.id !== floor.id) { // 排除当前电梯导航组件自身
+              var floorName = getFloorTypeName(f.type);
+              floorOptionsHtml += '<option value="' + f.id + '">' + floorName + '</option>';
+            }
+          });
+
+          // 生成标签列表HTML
+          var tagsHtml = tags.map(function(tag, index) {
+            // 生成当前标签的组件选择下拉框
+            var selectedFloorId = tag.targetFloorId || '';
+            var selectHtml = floorOptionsHtml;
+            if (selectedFloorId) {
+              selectHtml = selectHtml.replace('value="' + selectedFloorId + '"', 'value="' + selectedFloorId + '" selected');
+            }
+
+            // 使用标准图片选择器
+            var imageSelectorHtml = generateImageSelectorHTML({
+              imageUrl: tag.image || '',
+              previewId: 'elevator-nav-img-preview-' + index,
+              uploadBtnId: 'elevator-nav-upload-btn-' + index,
+              libraryBtnId: 'elevator-nav-library-btn-' + index,
+              fileInputId: 'elevator-nav-file-input-' + index,
+              tip: '建议尺寸：48x48px'
+            });
+
+            return '' +
+              '<div class="elevator-nav-tag-row" style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:10px;background:#fafafa;">' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                  '<span style="font-size:13px;font-weight:500;color:var(--text);">标签 ' + (index + 1) + '</span>' +
+                  (tags.length > 2 ? '<button type="button" class="btn btn-danger btn-sm elevator-nav-tag-remove" data-index="' + index + '" style="padding:2px 8px;">删除</button>' : '') +
+                '</div>' +
+                '<div style="margin-bottom:8px;">' +
+                  '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">图片</label>' +
+                  imageSelectorHtml +
+                '</div>' +
+                '<div style="display:flex;gap:8px;">' +
+                  '<div style="flex:1;">' +
+                    '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">文字</label>' +
+                    '<input type="text" class="elevator-nav-tag-text" data-index="' + index + '" value="' + (tag.text || '') + '" placeholder="标签文字" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                  '</div>' +
+                  '<div style="flex:1;">' +
+                    '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">跳转组件</label>' +
+                    '<select class="elevator-nav-tag-target" data-index="' + index + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;background:#fff;">' + selectHtml + '</select>' +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+          }).join('');
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">模板设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>模板类型</label>' +
+                  '<select id="elevator-nav-template" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="text" ' + (templateType === 'text' ? 'selected' : '') + '>文字类型</option>' +
+                    '<option value="image-text" ' + (templateType === 'image-text' ? 'selected' : '') + '>图文类型</option>' +
+                    '<option value="image" ' + (templateType === 'image' ? 'selected' : '') + '>图片类型</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>展示方式</label>' +
+                  '<select id="elevator-nav-display" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="scroll" ' + (displayMode === 'scroll' ? 'selected' : '') + '>横向滚动</option>' +
+                    '<option value="fixed" ' + (displayMode === 'fixed' ? 'selected' : '') + '>固定</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>标签风格</label>' +
+                  '<select id="elevator-nav-tag-style" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="bg" ' + (tagStyle === 'bg' ? 'selected' : '') + '>背景模式</option>' +
+                    '<option value="rounded" ' + (tagStyle === 'rounded' ? 'selected' : '') + '>圆框</option>' +
+                    '<option value="square" ' + (tagStyle === 'square' ? 'selected' : '') + '>方框</option>' +
+                    '<option value="underline" ' + (tagStyle === 'underline' ? 'selected' : '') + '>下划线</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">标签配置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<div id="elevator-nav-tags-container">' + tagsHtml + '</div>' +
+                  '<button type="button" class="btn btn-primary btn-sm" id="elevator-nav-add-tag" style="margin-top:6px;">+ 添加标签</button>' +
+                  '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;">点击标签可切换选中状态，支持横向滚动或固定展示。</p>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">选中状态样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>选中颜色</label>' +
+                  '<input type="color" id="elevator-nav-active-bg" value="' + activeBgColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>组件背景色</label>' +
+                  '<input type="color" id="elevator-nav-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">默认状态样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>默认文字色</label>' +
+                  '<input type="color" id="elevator-nav-default-text" value="' + defaultTextColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="elevator-nav-page-padding" min="0" max="30" value="' + pagePadding + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">吸顶设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>开启吸顶</label>' +
+                  '<select id="elevator-nav-enable-sticky" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="false" ' + (!enableSticky ? 'selected' : '') + '>关闭</option>' +
+                    '<option value="true" ' + (enableSticky ? 'selected' : '') + '>开启</option>' +
+                  '</select>' +
+                  '<p style="font-size:11px;color:var(--text-muted);margin-top:4px;">开启后，页面滚动超过此组件时固定在顶部</p>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>吸顶距离(px)</label>' +
+                  '<input type="number" id="elevator-nav-sticky-top" min="0" max="100" value="' + stickyTop + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                  '<p style="font-size:11px;color:var(--text-muted);margin-top:4px;">吸顶时距离顶部的距离</p>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        // 个性化推荐组件配置面板
+        if (floor.type === 'personal-recommend') {
+          var config = floor.personalRecommendConfig || {};
+          var recommendRule = config.recommendRule || 'guess';
+          var enableRefresh = config.enableRefresh !== false;
+          var listStyle = config.listStyle || 'small-double';
+          var showGoodsName = config.showGoodsName !== false;
+          var showPrice = config.showPrice !== false;
+          var showSales = config.showSales !== false;
+          var showOriginalPrice = config.showOriginalPrice === true;
+          var cartStyle = config.cartStyle || 'style1';
+          var goodsCount = config.goodsCount || 6;
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var title = config.title || '为你推荐';
+          var showTitle = config.showTitle !== false;
+          // 边距和边角样式
+          var pagePadding = config.pagePadding || 0;
+          var goodsPadding = config.goodsPadding !== undefined ? config.goodsPadding : 10;
+          var cornerStyle = config.cornerStyle || 'rounded';
+          var goodsCorner = config.goodsCorner || 'rounded';
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">推荐设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>推荐规则</label>' +
+                  '<select id="personal-recommend-rule" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="guess" ' + (recommendRule === 'guess' ? 'selected' : '') + '>猜你喜欢</option>' +
+                    '<option value="view-again" ' + (recommendRule === 'view-again' ? 'selected' : '') + '>看了又看</option>' +
+                    '<option value="buy-again" ' + (recommendRule === 'buy-again' ? 'selected' : '') + '>买了又买</option>' +
+                    '<option value="everyone-buy" ' + (recommendRule === 'everyone-buy' ? 'selected' : '') + '>大家都在买</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>换一换功能</label>' +
+                  '<select id="personal-recommend-refresh" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="true" ' + (enableRefresh ? 'selected' : '') + '>开启</option>' +
+                    '<option value="false" ' + (!enableRefresh ? 'selected' : '') + '>关闭</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>商品数量</label>' +
+                  '<select id="personal-recommend-count" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="4" ' + (goodsCount === 4 ? 'selected' : '') + '>4</option>' +
+                    '<option value="6" ' + (goodsCount === 6 ? 'selected' : '') + '>6</option>' +
+                    '<option value="8" ' + (goodsCount === 8 ? 'selected' : '') + '>8</option>' +
+                    '<option value="10" ' + (goodsCount === 10 ? 'selected' : '') + '>10</option>' +
+                    '<option value="12" ' + (goodsCount === 12 ? 'selected' : '') + '>12</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">标题设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>显示标题</label>' +
+                  '<select id="personal-recommend-show-title" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="true" ' + (showTitle ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showTitle ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>标题文字</label>' +
+                  '<input type="text" id="personal-recommend-title" value="' + title + '" placeholder="输入标题" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">列表样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>选择列表样式</label>' +
+                  '<select id="personal-recommend-list-style" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="large-single" ' + (listStyle === 'large-single' ? 'selected' : '') + '>大图单列</option>' +
+                    '<option value="small-double" ' + (listStyle === 'small-double' ? 'selected' : '') + '>小图两列</option>' +
+                    '<option value="detail-list" ' + (listStyle === 'detail-list' ? 'selected' : '') + '>详细列表</option>' +
+                    '<option value="small-triple" ' + (listStyle === 'small-triple' ? 'selected' : '') + '>小图三列</option>' +
+                    '<option value="one-large-two-small" ' + (listStyle === 'one-large-two-small' ? 'selected' : '') + '>一大两小</option>' +
+                    '<option value="horizontal-scroll" ' + (listStyle === 'horizontal-scroll' ? 'selected' : '') + '>横向滑动</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">显示设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>显示商品名称</label>' +
+                  '<select id="personal-recommend-show-name" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="true" ' + (showGoodsName ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showGoodsName ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示销售价</label>' +
+                  '<select id="personal-recommend-show-price" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="true" ' + (showPrice ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showPrice ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示销量</label>' +
+                  '<select id="personal-recommend-show-sales" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="true" ' + (showSales ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showSales ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示划线价</label>' +
+                  '<select id="personal-recommend-show-original" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="true" ' + (showOriginalPrice ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showOriginalPrice ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>购物车样式</label>' +
+                  '<select id="personal-recommend-cart-style" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="style1" ' + (cartStyle === 'style1' ? 'selected' : '') + '>样式1</option>' +
+                    '<option value="style2" ' + (cartStyle === 'style2' ? 'selected' : '') + '>样式2</option>' +
+                    '<option value="style3" ' + (cartStyle === 'style3' ? 'selected' : '') + '>样式3</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="personal-recommend-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">样式设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>组件边角样式</label>' +
+                  '<select id="personal-recommend-corner-style" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="rounded" ' + (cornerStyle === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (cornerStyle === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>商品卡片倒角</label>' +
+                  '<select id="personal-recommend-goods-corner" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;">' +
+                    '<option value="rounded" ' + (goodsCorner === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (goodsCorner === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="personal-recommend-page-padding" min="0" max="30" value="' + pagePadding + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>商品间距(px)</label>' +
+                  '<input type="number" id="personal-recommend-goods-padding" min="0" max="20" value="' + goodsPadding + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        // 自定义组件配置面板
+        if (floor.type === 'custom-component') {
+          var config = floor.customComponentConfig || {};
+          var customHtml = config.customHtml || '';
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var padding = config.padding || 10;
+          var componentName = config.componentName || '自定义组件';
+          var pagePadding = config.pagePadding || 0;
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">组件信息</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>组件名称</label>' +
+                  '<input type="text" id="custom-component-name" value="' + componentName + '" placeholder="输入组件名称" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">HTML代码</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>自定义HTML内容</label>' +
+                  '<textarea id="custom-component-html" placeholder="在此输入HTML代码..." style="width:100%;min-height:150px;border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;font-family:monospace;resize:vertical;line-height:1.5;">' + customHtml.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</textarea>' +
+                  '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;line-height:1.6;">支持输入HTML代码，可包含内联样式。注意：不支持JavaScript脚本。</p>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">样式设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="custom-component-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>内边距(px)</label>' +
+                  '<input type="number" id="custom-component-padding" value="' + padding + '" min="0" max="50" step="1" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">页面边距</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="custom-component-page-padding" value="' + pagePadding + '" min="0" max="30" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        // ========== 我的页面组件配置面板 ==========
+        if (floor.type === 'mine-header') {
+          var config = floor.mineHeaderConfig || {};
+          var avatarUrl = config.avatarUrl || '';
+          var nickname = config.nickname || '用户昵称';
+          var memberLevel = config.memberLevel || '普通会员';
+          var showLevelBadge = config.showLevelBadge !== false;
+          var showSettingsIcon = config.showSettingsIcon !== false;
+          var backgroundColor = config.backgroundColor || '#ff6034';
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">用户信息</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>用户昵称</label>' +
+                  '<input type="text" id="mine-header-nickname" value="' + nickname + '" placeholder="输入用户昵称" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                '</div>' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>会员等级</label>' +
+                  '<input type="text" id="mine-header-level" value="' + memberLevel + '" placeholder="输入会员等级" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示等级标签</label>' +
+                  '<select id="mine-header-show-level">' +
+                    '<option value="true" ' + (showLevelBadge ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showLevelBadge ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示设置图标</label>' +
+                  '<select id="mine-header-show-settings">' +
+                    '<option value="true" ' + (showSettingsIcon ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showSettingsIcon ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">样式设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="mine-header-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        if (floor.type === 'mine-stats-bar') {
+          var config = floor.mineStatsBarConfig || {};
+          var backgroundColor = config.backgroundColor || '#ff6034';
+          var statsItems = config.statsItems || [
+            { value: '1,280', label: '积分中心', link: '/points' },
+            { value: '5', label: '卡券', link: '/coupons' },
+          ];
+
+          var statsItemsHtml = statsItems.map(function(item, index) {
+            return '<div class="config-nested-item" style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
+              '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">统计项 ' + (index + 1) + '</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>数值</label>' +
+                  '<input type="text" id="mine-stats-value-' + index + '" value="' + item.value + '" placeholder="数值" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>标签</label>' +
+                  '<input type="text" id="mine-stats-label-' + index + '" value="' + item.label + '" placeholder="标签" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">统计项配置</div>' +
+              '<div style="max-height:320px;overflow-y:auto;">' +
+                statsItemsHtml +
+              '</div>' +
+              '<button type="button" class="btn btn-ghost" id="mine-stats-add-item" style="width:100%;margin-top:8px;">+ 添加统计项</button>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">样式设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="mine-stats-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        if (floor.type === 'mine-nav-grid') {
+
+          var config = floor.mineNavGridConfig || {};
+          var title = config.title || '我的服务';
+          var showTitle = config.showTitle !== false;
+          var columns = config.columns || 4;
+          var navItems = config.navItems || [
+            { icon: '🎁', image: '', name: '积分商城', jumpType: 'none', jumpTarget: '' },
+            { icon: '💰', image: '', name: '我的积分', jumpType: 'none', jumpTarget: '' },
+            { icon: '👑', image: '', name: '会员权益', jumpType: 'none', jumpTarget: '' },
+            { icon: '🎫', image: '', name: '我的优惠券', jumpType: 'none', jumpTarget: '' },
+          ];
+          var backgroundColor = config.backgroundColor || '#ffffff';
+
+          var navItemsHtml = navItems.map(function(item, index) {
+            var imageSelectorHtml = generateImageSelectorHTML({
+              imageUrl: item.image || '',
+              previewId: 'mine-nav-img-preview-' + index,
+              uploadBtnId: 'mine-nav-upload-btn-' + index,
+              libraryBtnId: 'mine-nav-library-btn-' + index,
+              fileInputId: 'mine-nav-file-input-' + index,
+              tip: ''
+            });
+
+            return '<div class="config-nested-item" style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
+              '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">导航项 ' + (index + 1) + '</div>' +
+              '<div style="margin-bottom:8px;">' +
+                '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">名称</label>' +
+                '<input type="text" id="mine-nav-name-' + index + '" value="' + item.name + '" placeholder="输入名称" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;" />' +
+              '</div>' +
+              '<div style="margin-bottom:8px;">' +
+                '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">图标</label>' +
+                imageSelectorHtml +
+              '</div>' +
+              generateJumpConfigHTML({
+                jumpType: item.jumpType || 'none',
+                jumpTarget: item.jumpTarget || '',
+                typeSelectId: 'mine-nav-jump-type',
+                targetInputId: 'mine-nav-jump-target',
+                index: index,
+                label: '跳转配置',
+                excludeTypes: ['category', 'brand', 'tag', 'product']
+              }) +
+            '</div>';
+          }).join('');
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">标题设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>标题文字</label>' +
+                  '<input type="text" id="mine-nav-title" value="' + title + '" placeholder="输入标题" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示标题</label>' +
+                  '<select id="mine-nav-show-title">' +
+                    '<option value="true" ' + (showTitle ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showTitle ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">布局设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>每行列数</label>' +
+                  '<select id="mine-nav-columns">' +
+                    '<option value="3" ' + (columns === 3 ? 'selected' : '') + '>3列</option>' +
+                    '<option value="4" ' + (columns === 4 ? 'selected' : '') + '>4列</option>' +
+                    '<option value="5" ' + (columns === 5 ? 'selected' : '') + '>5列</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="mine-nav-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>容器边角</label>' +
+                  '<select id="mine-nav-corner">' +
+                    '<option value="rounded" ' + ((config.cornerStyle || 'rounded') === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + ((config.cornerStyle || 'rounded') === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="mine-nav-page-padding" min="0" max="30" value="' + (config.pagePadding || 0) + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">导航项配置</div>' +
+              '<div style="max-height:320px;overflow-y:auto;">' +
+                navItemsHtml +
+              '</div>' +
+              '<button type="button" class="btn btn-ghost" id="mine-nav-add-item" style="width:100%;margin-top:8px;">+ 添加导航项</button>' +
+            '</div>';
+        }
+        if (floor.type === 'mine-menu-list') {
+
+          var config = floor.mineMenuListConfig || {};
+          var title = config.title || '更多服务';
+          var showTitle = config.showTitle !== false;
+          var menuItems = config.menuItems || [
+            { icon: '📦', image: '', name: '我的订单', jumpType: 'none', jumpTarget: '' },
+            { icon: '📍', image: '', name: '收货地址', jumpType: 'none', jumpTarget: '' },
+            { icon: '⚙️', image: '', name: '设置', jumpType: 'none', jumpTarget: '' },
+          ];
+          var backgroundColor = config.backgroundColor || '#ffffff';
+
+          var menuItemsHtml = menuItems.map(function(item, index) {
+            var imageSelectorHtml = generateImageSelectorHTML({
+              imageUrl: item.image || '',
+              previewId: 'mine-menu-img-preview-' + index,
+              uploadBtnId: 'mine-menu-upload-btn-' + index,
+              libraryBtnId: 'mine-menu-library-btn-' + index,
+              fileInputId: 'mine-menu-file-input-' + index,
+              tip: ''
+            });
+
+            return '<div class="config-nested-item" style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
+              '<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">菜单项 ' + (index + 1) + '</div>' +
+              '<div style="margin-bottom:8px;">' +
+                '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">名称</label>' +
+                '<input type="text" id="mine-menu-name-' + index + '" value="' + item.name + '" placeholder="输入名称" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 10px;font-size:13px;" />' +
+              '</div>' +
+              '<div style="margin-bottom:8px;">' +
+                '<label style="font-size:12px;color:var(--text-muted);margin-bottom:4px;display:block;">图标</label>' +
+                imageSelectorHtml +
+              '</div>' +
+              generateJumpConfigHTML({
+                jumpType: item.jumpType || 'none',
+                jumpTarget: item.jumpTarget || '',
+                typeSelectId: 'mine-menu-jump-type',
+                targetInputId: 'mine-menu-jump-target',
+                index: index,
+                label: '跳转配置',
+                excludeTypes: ['category', 'brand', 'tag', 'product']
+              }) +
+            '</div>';
+          }).join('');
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">标题设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>标题文字</label>' +
+                  '<input type="text" id="mine-menu-title" value="' + title + '" placeholder="输入标题" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示标题</label>' +
+                  '<select id="mine-menu-show-title">' +
+                    '<option value="true" ' + (showTitle ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showTitle ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">样式设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="mine-menu-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>容器边角</label>' +
+                  '<select id="mine-menu-corner">' +
+                    '<option value="rounded" ' + ((config.cornerStyle || 'rounded') === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + ((config.cornerStyle || 'rounded') === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="mine-menu-page-padding" min="0" max="30" value="' + (config.pagePadding || 0) + '" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">菜单项配置</div>' +
+              '<div style="max-height:320px;overflow-y:auto;">' +
+                menuItemsHtml +
+              '</div>' +
+              '<button type="button" class="btn btn-ghost" id="mine-menu-add-item" style="width:100%;margin-top:8px;">+ 添加菜单项</button>' +
+            '</div>';
+        }
+        if (floor.type === 'points-card') {
+          var config = floor.pointsCardConfig || {};
+          var currentPoints = config.currentPoints || 12580;
+          var pointsName = config.pointsName || '积分';
+          var showExchangeBtn = config.showExchangeBtn !== false;
+          var backgroundColor = config.backgroundColor || '#fff7e6';
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">积分设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>积分数值</label>' +
+                  '<input type="number" id="points-card-value" value="' + currentPoints + '" min="0" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>积分名称</label>' +
+                  '<input type="text" id="points-card-name" value="' + pointsName + '" placeholder="积分名称" style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 12px;font-size:13px;" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示兑换按钮</label>' +
+                  '<select id="points-card-show-btn">' +
+                    '<option value="true" ' + (showExchangeBtn ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showExchangeBtn ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">样式设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="points-card-bg-color" value="' + backgroundColor + '" style="width:100%;height:32px;" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        // 旧的banner组件（兼容处理）
+        if (floor.type === 'banner') {
+          return '<div class="config-grid"><div class="config-item" style="grid-column:1/-1;"><p style="font-size:13px;color:var(--text-muted);">此组件已升级为"轮播图"，请使用轮播图组件。</p></div></div>';
+        }
+        if (floor.type === 'goods-grid') {
+          return '<div class="config-grid"><div class="config-item"><label>每行数量</label><select><option>2 列</option><option>3 列</option><option>4 列</option></select></div><div class="config-item"><label>卡片样式</label><select><option>标准卡片</option><option>瀑布流</option></select></div><div class="config-item"><label>显示销售价</label><select><option>显示</option><option>隐藏</option></select></div><div class="config-item"><label>商品数量</label><input value="8" /></div></div>';
+        }
+        if (floor.type === 'rich-text') {
+          var config = floor.richTextConfig || {};
+          // 默认内容：富文本示例
+          var defaultRichTextContent = '<p style="color:#1677ff;font-size:15px;">点此编辑『富文本』内容 ----></p>\n<p>你可以对文字进行<strong>加粗</strong>、<em>斜体</em>、<u>下划线</u>、<s>删除线</s>、<span style="color: red;">文字颜色</span>、<span style="background-color: yellow;">背景色</span>、以及字号大小等简单排版操作。</p>\n<p>还可以在这里加入表格了</p>\n<table style="width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px;">\n<thead>\n<tr style="background: #f5f5f5;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">中奖客户</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">发放奖品</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">备注</th></tr>\n</thead>\n<tbody>\n<tr><td style="border: 1px solid #ddd; padding: 8px;">猪猪</td><td style="border: 1px solid #ddd; padding: 8px;">内测码</td><td style="border: 1px solid #ddd; padding: 8px;"><em>已经发放</em></td></tr>\n<tr><td style="border: 1px solid #ddd; padding: 8px;">大麦</td><td style="border: 1px solid #ddd; padding: 8px;">积分</td><td style="border: 1px solid #ddd; padding: 8px;"><a href="#">领取地址</a></td></tr>\n</tbody>\n</table>\n<p>也可在这里插入图片、并对图片加上超级链接，方便用户点击。</p>';
+          var content = config.content || defaultRichTextContent;
+          var isDefaultContent = config.isDefaultContent !== false; // 默认为true
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var backgroundImage = config.backgroundImage || '';
+          var paddingTop = config.paddingTop !== undefined ? config.paddingTop : 14;
+          var paddingBottom = config.paddingBottom !== undefined ? config.paddingBottom : 14;
+          var paddingLeft = config.paddingLeft !== undefined ? config.paddingLeft : 14;
+          var paddingRight = config.paddingRight !== undefined ? config.paddingRight : 14;
+          var maxWidth = config.maxWidth || 0;
+          var textColor = config.textColor || '#333333';
+          var cornerStyle = config.cornerStyle || 'rounded';
+          var contentPreview = content.length > 100 ? content.substring(0, 100) + '...' : content;
+
+          var imageSelectorHtml = generateImageSelectorHTML({
+            imageUrl: backgroundImage,
+            previewId: 'rt-bg-img-preview',
+            uploadBtnId: 'rt-upload-btn',
+            libraryBtnId: 'rt-library-btn',
+            fileInputId: 'rt-file-input',
+            tip: ''
+          });
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">文本编辑</div>' +
+              '<p style="font-size:12px;color:var(--text-muted);margin:0 0 10px;">' + (isDefaultContent ? '<span style="color:#faad14;">当前为示例内容，点击编辑后自动清空。</span>' : '点击下方按钮打开编辑器。') + '</p>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>富文本内容</label>' +
+                  '<div style="margin-bottom:8px;padding:10px;background:#fafafa;border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-secondary);max-height:60px;overflow:hidden;text-overflow:ellipsis;">' +
+                    '<div style="white-space:nowrap;overflow:hidden;">' + (isDefaultContent ? '📝 示例内容：富文本演示...' : '📝 ' + contentPreview.replace(/<[^>]*>/g, '')) + '</div>' +
+                  '</div>' +
+                  '<button type="button" class="btn btn-primary" id="rt-open-editor" style="width:100%;height:36px;">📝 打开富文本编辑器</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">背景设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="rt-bg-color" value="' + backgroundColor + '" />' +
+                '</div>' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>背景图片（可选）</label>' +
+                  imageSelectorHtml +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>图片填充方式</label>' +
+                  '<select id="rt-bg-size">' +
+                    '<option value="cover" ' + ((config.backgroundSize || 'cover') === 'cover' ? 'selected' : '') + '>覆盖</option>' +
+                    '<option value="contain" ' + ((config.backgroundSize || 'cover') === 'contain' ? 'selected' : '') + '>包含</option>' +
+                    '<option value="auto" ' + ((config.backgroundSize || 'cover') === 'auto' ? 'selected' : '') + '>原始尺寸</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>图片重复</label>' +
+                  '<select id="rt-bg-repeat">' +
+                    '<option value="no-repeat" ' + ((config.backgroundRepeat || 'no-repeat') === 'no-repeat' ? 'selected' : '') + '>不重复</option>' +
+                    '<option value="repeat" ' + ((config.backgroundRepeat || 'no-repeat') === 'repeat' ? 'selected' : '') + '>平铺</option>' +
+                    '<option value="repeat-x" ' + ((config.backgroundRepeat || 'no-repeat') === 'repeat-x' ? 'selected' : '') + '>水平重复</option>' +
+                    '<option value="repeat-y" ' + ((config.backgroundRepeat || 'no-repeat') === 'repeat-y' ? 'selected' : '') + '>垂直重复</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>上边距(px)</label>' +
+                  '<input type="number" id="rt-padding-top" value="' + paddingTop + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>下边距(px)</label>' +
+                  '<input type="number" id="rt-padding-bottom" value="' + paddingBottom + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>左边距(px)</label>' +
+                  '<input type="number" id="rt-padding-left" value="' + paddingLeft + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>右边距(px)</label>' +
+                  '<input type="number" id="rt-padding-right" value="' + paddingRight + '" min="0" max="100" />' +
+                '</div>' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>最大宽度(px，0表示不限制)</label>' +
+                  '<input type="number" id="rt-max-width" value="' + maxWidth + '" min="0" max="1000" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>边角样式</label>' +
+                  '<select id="rt-corner-style">' +
+                    '<option value="rounded" ' + (cornerStyle === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (cornerStyle === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        if (floor.type === 'goods-group') {
+          var config = floor.goodsGroupConfig || {};
+          var menuBgColor = config.menuBgColor || '#ffffff';
+          var menuStyle = config.menuStyle || 'rounded';
+          var showGroupName = config.showGroupName !== false;
+          var listStyle = config.listStyle || 'small-double';
+          var goodsStyle = config.goodsStyle || 'card-shadow';
+          var cartStyle = config.cartStyle || 'style1';
+          var showDesc = config.showDesc !== false;
+          var showOriginalPrice = config.showOriginalPrice === true;
+          var showPrice = config.showPrice !== false;
+          var showSales = config.showSales !== false;
+          var textStyle = config.textStyle || 'normal';
+          var goodsCorner = config.goodsCorner || 'rounded';
+          var pagePadding = config.pagePadding || 0;
+          var goodsPadding = config.goodsPadding || 10;
+          var enableRefresh = config.enableRefresh === true;
+          var groups = config.groups || [
+            { id: 'group-1', name: '推荐', dataSource: 'brand', sortType: 'comprehensive', goodsCount: 20 },
+            { id: 'group-2', name: '新品', dataSource: 'brand', sortType: 'newest' },
+            { id: 'group-3', name: '热销', dataSource: 'brand', sortType: 'sales' },
+          ];
+
+          // 生成分组配置HTML
+          var groupsConfigHtml = groups.map(function(group, index) {
+            // 获取已选择的品牌/标签/分类/商品名称
+            var selectedNames = '';
+            if (group.selectedItems && group.selectedItems.length > 0) {
+              var items = [];
+              if (group.dataSourceType === 'tag') {
+                items = flattenTreeNodes(MOCK_TAGS);
+              } else if (group.dataSourceType === 'brand') {
+                items = MOCK_BRANDS;
+              } else if (group.dataSourceType === 'category') {
+                items = flattenTreeNodes(MOCK_CATEGORIES);
+              } else if (group.dataSourceType === 'product') {
+                items = MOCK_GOODS_DATA.slice(0, 30).map(function(g) { return { id: g.id, name: g.name }; });
+              }
+              selectedNames = group.selectedItems.map(function(id) {
+                var item = items.find(function(i) { return i.id === id; });
+                return item ? item.name : '';
+              }).filter(function(n) { return n; }).join('、');
+            }
+            var sourceTypeTextMap = {
+              'brand': '品牌',
+              'tag': '标签',
+              'category': '分类',
+              'product': '商品'
+            };
+            var sourceTypeText = sourceTypeTextMap[group.dataSourceType] || '品牌';
+
+            return '<div class="gg-group-config-item" data-group-id="' + group.id + '" style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:#fafafa;">' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="display:flex;gap:8px;align-items:flex-end;">' +
+                  '<div style="flex:1;display:flex;flex-direction:column;gap:4px;">' +
+                    '<label>分组名称</label>' +
+                    '<input type="text" class="gg-group-name-input" data-group-id="' + group.id + '" value="' + (group.name || '') + '" placeholder="请输入名称" style="width:100%;" />' +
+                  '</div>' +
+                  (groups.length > 1 ? '<button type="button" class="btn btn-danger btn-sm gg-delete-group-btn" data-group-id="' + group.id + '" style="height:34px;">删除</button>' : '') +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>商品显示个数</label>' +
+                  '<select class="gg-group-goods-count" data-group-id="' + group.id + '">' +
+                    '<option value="20" ' + (group.goodsCount === 20 ? 'selected' : '') + '>20</option>' +
+                    '<option value="50" ' + (group.goodsCount === 50 ? 'selected' : '') + '>50</option>' +
+                    '<option value="100" ' + (group.goodsCount === 100 ? 'selected' : '') + '>100</option>' +
+                    '<option value="200" ' + (group.goodsCount === 200 ? 'selected' : '') + '>200</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>商品数据来源</label>' +
+                  '<div style="display:flex;gap:8px;align-items:center;">' +
+                    '<div style="flex:1;padding:8px 12px;background:#fff;border:1px solid var(--border);border-radius:6px;font-size:12px;color:var(--text-secondary);min-height:34px;display:flex;align-items:center;">' +
+                      (selectedNames ? '<span style="color:var(--primary);">' + sourceTypeText + '：' + selectedNames + '</span>' : '<span style="color:var(--text-muted);">未配置，点击右侧按钮配置</span>') +
+                    '</div>' +
+                    '<button type="button" class="btn btn-primary btn-sm gg-config-source-btn" data-group-id="' + group.id + '" data-floor-id="' + floor.id + '" style="height:34px;white-space:nowrap;">配置</button>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">分组配置</div>' +
+              '<p style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">配置商品分组的Tab标题和商品数据来源，点击画布中的Tab可切换查看不同商品。</p>' +
+              '<div id="gg-groups-config-list">' + groupsConfigHtml + '</div>' +
+              '<button type="button" class="btn btn-primary btn-sm" id="gg-add-group-btn" style="width:100%;">+ 添加分组</button>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">菜单样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="gg-menu-bg-color" value="' + menuBgColor + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>菜单样式</label>' +
+                  '<select id="gg-menu-style">' +
+                    '<option value="rounded" ' + (menuStyle === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (menuStyle === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示分组名称</label>' +
+                  '<select id="gg-show-group-name">' +
+                    '<option value="true" ' + (showGroupName ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showGroupName ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">列表样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>选择列表样式</label>' +
+                  '<select id="gg-list-style">' +
+                    '<option value="large-single" ' + (listStyle === 'large-single' ? 'selected' : '') + '>大图单列</option>' +
+                    '<option value="small-double" ' + (listStyle === 'small-double' ? 'selected' : '') + '>小图两列</option>' +
+                    '<option value="detail-list" ' + (listStyle === 'detail-list' ? 'selected' : '') + '>详细列表</option>' +
+                    '<option value="small-triple" ' + (listStyle === 'small-triple' ? 'selected' : '') + '>小图三列</option>' +
+                    '<option value="one-large-two-small" ' + (listStyle === 'one-large-two-small' ? 'selected' : '') + '>一大两小</option>' +
+                    '<option value="horizontal-scroll" ' + (listStyle === 'horizontal-scroll' ? 'selected' : '') + '>横向滑动</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">商品样式</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>商品样式</label>' +
+                  '<select id="gg-goods-style">' +
+                    '<option value="no-border-white" ' + (goodsStyle === 'no-border-white' ? 'selected' : '') + '>无边白底</option>' +
+                    '<option value="card-shadow" ' + (goodsStyle === 'card-shadow' ? 'selected' : '') + '>卡片投影</option>' +
+                    '<option value="border-white" ' + (goodsStyle === 'border-white' ? 'selected' : '') + '>描边白底</option>' +
+                    '<option value="no-border-transparent" ' + (goodsStyle === 'no-border-transparent' ? 'selected' : '') + '>无边透明</option>' +
+                    '<option value="promotion" ' + (goodsStyle === 'promotion' ? 'selected' : '') + '>促销</option>' +
+                    '<option value="waterfall" ' + (goodsStyle === 'waterfall' ? 'selected' : '') + '>瀑布流</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>购买按钮样式</label>' +
+                  '<select id="gg-cart-style">' +
+                    '<option value="style1" ' + (cartStyle === 'style1' ? 'selected' : '') + '>样式1</option>' +
+                    '<option value="style2" ' + (cartStyle === 'style2' ? 'selected' : '') + '>样式2</option>' +
+                    '<option value="style3" ' + (cartStyle === 'style3' ? 'selected' : '') + '>样式3</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>商品倒角</label>' +
+                  '<select id="gg-goods-corner">' +
+                    '<option value="rounded" ' + (goodsCorner === 'rounded' ? 'selected' : '') + '>圆角</option>' +
+                    '<option value="square" ' + (goodsCorner === 'square' ? 'selected' : '') + '>直角</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>文本样式</label>' +
+                  '<select id="gg-text-style">' +
+                    '<option value="normal" ' + (textStyle === 'normal' ? 'selected' : '') + '>常规</option>' +
+                    '<option value="bold" ' + (textStyle === 'bold' ? 'selected' : '') + '>加粗</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">显示设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>商品描述</label>' +
+                  '<select id="gg-show-desc">' +
+                    '<option value="true" ' + (showDesc ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showDesc ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示划线价</label>' +
+                  '<select id="gg-show-original">' +
+                    '<option value="true" ' + (showOriginalPrice ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showOriginalPrice ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>显示销售价</label>' +
+                  '<select id="gg-show-price">' +
+                    '<option value="true" ' + (showPrice ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showPrice ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>商品销量</label>' +
+                  '<select id="gg-show-sales">' +
+                    '<option value="true" ' + (showSales ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (!showSales ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">边距设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>页面边距</label>' +
+                  '<input type="number" id="gg-page-padding" min="0" max="30" value="' + pagePadding + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>商品边距</label>' +
+                  '<input type="number" id="gg-goods-padding" min="0" max="20" value="' + goodsPadding + '" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">换一换功能</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>启用换一换</label>' +
+                  '<select id="gg-enable-refresh">' +
+                    '<option value="true" ' + (enableRefresh ? 'selected' : '') + '>开启</option>' +
+                    '<option value="false" ' + (!enableRefresh ? 'selected' : '') + '>关闭</option>' +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        if (floor.type === 'search-bar') {
+          var config = floor.searchBarConfig || {};
+          var placeholder = config.placeholder || '搜索商品、优惠券、活动';
+          var bgColor = config.backgroundColor || '#f3f6fb';
+          var borderRadius = config.borderRadius || 17;
+          var height = config.height || 34;
+          var pagePadding = config.pagePadding !== undefined ? config.pagePadding : 12;
+          return '' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">搜索框设置</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>占位文字</label>' +
+                  '<input type="text" id="search-placeholder" value="' + placeholder + '" placeholder="请输入占位文字" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>背景颜色</label>' +
+                  '<input type="color" id="search-bg-color" value="' + bgColor + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>圆角大小</label>' +
+                  '<input type="number" id="search-border-radius" min="0" max="30" value="' + borderRadius + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>搜索框高度</label>' +
+                  '<input type="number" id="search-height" min="28" max="50" value="' + height + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>页面边距(px)</label>' +
+                  '<input type="number" id="search-page-padding" min="0" max="30" value="' + pagePadding + '" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+        if (floor.type === 'category-entry') {
+          return '<div class="config-grid"><div class="config-item"><label>入口数量</label><input value="8" /></div><div class="config-item"><label>每行数量</label><select><option>4 个</option><option>5 个</option></select></div><div class="config-item"><label>图标风格</label><select><option>圆角图标</option><option>纯色图标</option></select></div><div class="config-item"><label>是否显示标题</label><select><option>显示</option><option>隐藏</option></select></div></div>';
+        }
+        if (floor.type === 'marketing') {
+          return '<div class="config-grid"><div class="config-item"><label>活动类型</label><select><option>秒杀</option><option>拼团</option><option>限时购</option></select></div><div class="config-item"><label>主题颜色</label><input type="color" value="#722ed1" /></div><div class="config-item"><label>是否显示倒计时</label><select><option>显示</option><option>隐藏</option></select></div><div class="config-item"><label>活动数量</label><input value="4" /></div></div>';
+        }
+        if (floor.type === 'category-showcase') {
+          if (floor.categoryPreset === 'page3') {
+            return (
+              '<div class="config-grid">' +
+              '<div class="config-item" style="grid-column:1 / -1;">' +
+              '<p style="font-size:13px;line-height:1.75;color:var(--text);margin:0 0 8px;">此楼层为<strong>分类页3</strong>静态布局：左侧一级类目（「数码」高亮）、右侧可横向滚动的子类胶囊 Tab（含右侧下拉示意）、竖向商品卡片（左图右文、规格灰字、橙色价格 ¥198.98、圆形加购「+」）及列表底部「没有更多了」。</p>' +
+              '<p style="font-size:12px;color:var(--text-muted);margin:0;">完整设计稿参考：<code style="font-size:11px;">assets/category-page3-ref.png</code></p>' +
+              '</div>' +
+              '</div>'
+            );
+          }
+          if (floor.categoryPreset === 'page4') {
+            return (
+              '<div class="config-grid">' +
+              '<div class="config-item" style="grid-column:1 / -1;">' +
+              '<p style="font-size:13px;line-height:1.75;color:var(--text);margin:0 0 8px;">此楼层为<strong>分类页4</strong>静态布局：<strong>无左侧类目栏</strong>；顶部横向可滚动的子类胶囊 Tab（「希维尔」等高亮为 #ff8c00 系）、右侧下拉箭头；下方商品横卡（约 100×100 圆角主图、双行标题、灰色规格、大号橙色价格 ¥198.98、<strong>橙色描边空心圆加购</strong>）；列表底部「没有更多了」。主背景为白。</p>' +
+              '<p style="font-size:12px;color:var(--text-muted);margin:0;">完整设计稿参考：<code style="font-size:11px;">assets/category-page4-ref.png</code></p>' +
+              '</div>' +
+              '</div>'
+            );
+          }
+          if (floor.categoryPreset === 'page5') {
+            return (
+              '<div class="config-grid">' +
+              '<div class="config-item" style="grid-column:1 / -1;">' +
+              '<p style="font-size:13px;line-height:1.75;color:var(--text);margin:0 0 8px;">此楼层为<strong>分类页5</strong>静态布局：左侧一级类目（「数码」橙字、浅橙底、<strong>左侧橙色竖条</strong>）；右侧<strong>纯白</strong>单列商品列表，<strong>无 Banner、无顶部 Tab</strong>；卡片左图（约 40% 宽、圆角）右文，双行标题、灰规格、橙色 ¥198.98、<strong>实心橙圆白「+」加购</strong>；示例含 5 条（含空气净化器风格占位）。底栏「没有更多了」。</p>' +
+              '<p style="font-size:12px;color:var(--text-muted);margin:0;">完整设计稿参考：<code style="font-size:11px;">assets/category-page5-ref.png</code></p>' +
+              '</div>' +
+              '</div>'
+            );
+          }
+          const bannerConfig = ensureCategoryBannerConfig(floor);
+          return (
+            '<div class="config-grid">' +
+            '<div class="config-item" style="grid-column:1 / -1;">' +
+            '<label>Banner 轮播图</label>' +
+            '<div id="category-banner-rows">' +
+            getCategoryBannerRowsMarkup(bannerConfig.slides) +
+            '</div>' +
+            '<button type="button" class="btn btn-primary btn-sm" id="category-banner-add" style="margin-top:6px;">+ 添加图片</button>' +
+            '<div style="font-size:12px;color:var(--text-muted);line-height:1.6;margin-top:8px;">支持多张图片；仅一张时不轮播。多张时为<strong>同向无缝循环</strong>：始终向左切换，最后一张继续滑入与首张相同的衔接帧后再瞬间对齐到第一张，避免反向闪跳。每张可填跳转链接。可粘贴图片 URL 或点击「选择文件」添加本地图（原型内预览）。</div>' +
+            '</div>' +
+            '<div class="config-item"><label>轮播类型</label><select id="category-banner-loop" disabled style="width:100%;height:32px;border:1px solid var(--border);border-radius:8px;padding:0 8px;background:#f5f5f5;color:var(--text);cursor:not-allowed;"><option value="loop" selected>循环轮播（同向无缝）</option></select></div>' +
+            '<div class="config-item"><label>轮播间隔（毫秒）</label><input id="category-banner-interval" type="number" min="1000" step="500" value="' +
+            Number(bannerConfig.intervalMs || 5000) +
+            '" /></div>' +
+            '<div class="config-item"><label>圆角（px，0 为直角）</label><input id="category-banner-radius" type="number" min="0" max="24" step="1" value="' +
+            Number(bannerConfig.radius || 12) +
+            '" /></div>' +
+            '</div>'
+          );
+        }
+        return '<div class="config-grid"><div class="config-item"><label>主图比例</label><select><option>1:1</option><option>3:4</option><option>16:9</option></select></div><div class="config-item"><label>价格展示</label><select><option>显示</option><option>隐藏</option></select></div><div class="config-item"><label>按钮文案</label><input value="立即购买" /></div><div class="config-item"><label>卖点数量</label><input value="3" /></div></div>';
+      }
+
+      /**
+       * 获取底部导航属性配置面板的HTML
+       */
+      function getTabbarPropsMarkup() {
+        var currentPage = getCurrentPage();
+        var isSubPage = currentPage && currentPage.pageType === 'sub';
+        var showTabbar = currentPage ? (currentPage.showTabbar !== false) : true;
+
+        // 主页面和子页面都显示底部导航栏开关
+        var showTabbarSection = '' +
+          '<div class="config-section">' +
+            '<div class="config-section-title">显示设置</div>' +
+            '<div class="config-item-inline" style="margin-top:0;">' +
+              '<input id="page-show-tabbar" type="checkbox" ' + (showTabbar ? 'checked' : '') + ' />' +
+              '<label for="page-show-tabbar">显示底部导航栏</label>' +
+            '</div>' +
+            '<p style="font-size:12px;color:var(--text-muted);margin-top:8px;">关闭后，此页面将不显示底部导航栏</p>' +
+          '</div>';
+
+        return '' +
+          showTabbarSection +
+          '<div class="config-section">' +
+            '<div class="config-section-title">Tab栏设置</div>' +
+            '<p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">中间页面底部固定展示 Tab 栏，默认显示首页、分类页、我的，最少 1 个，最多 5 个。</p>' +
+            '<div class="tabbar-controls">' +
+              '<button type="button" class="btn btn-ghost btn-sm" id="btn-remove-tab">- 删除</button>' +
+              '<span class="tabbar-count" id="tabbar-count">' + tabItems.length + ' / 5</span>' +
+              '<button type="button" class="btn btn-primary btn-sm" id="btn-add-tab">+ 增加</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="config-section">' +
+            '<div class="config-section-title">样式设置</div>' +
+            '<div class="config-grid">' +
+              '<div class="config-item">' +
+                '<label for="tabbar-default-color">默认颜色</label>' +
+                '<input id="tabbar-default-color" type="color" value="' + tabbarConfig.defaultColor + '" />' +
+              '</div>' +
+              '<div class="config-item">' +
+                '<label for="tabbar-active-color">选中颜色</label>' +
+                '<input id="tabbar-active-color" type="color" value="' + tabbarConfig.activeColor + '" />' +
+              '</div>' +
+              '<div class="config-item">' +
+                '<label for="tabbar-font-size">字体大小</label>' +
+                '<input id="tabbar-font-size" type="number" min="10" max="20" value="' + tabbarConfig.fontSize + '" />' +
+              '</div>' +
+              '<div class="config-item">' +
+                '<label for="tabbar-height">整体高度</label>' +
+                '<input id="tabbar-height" type="number" min="56" max="100" value="' + tabbarConfig.height + '" />' +
+              '</div>' +
+              '<div class="config-item">' +
+                '<label for="tabbar-bg-color">背景颜色</label>' +
+                '<input id="tabbar-bg-color" type="color" value="' + tabbarConfig.backgroundColor + '" />' +
+              '</div>' +
+              '<div class="config-item">' +
+                '<label for="tabbar-border-color">边线框颜色</label>' +
+                '<input id="tabbar-border-color" type="color" value="' + tabbarConfig.borderColor + '" />' +
+              '</div>' +
+              '<div class="config-item">' +
+                '<label for="tabbar-icon-gap">图标与文字间距</label>' +
+                '<input id="tabbar-icon-gap" type="number" min="0" max="16" value="' + tabbarConfig.iconGap + '" />' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-item-inline">' +
+              '<input id="tabbar-show-text" type="checkbox" ' + (tabbarConfig.showText ? 'checked' : '') + ' />' +
+              '<label for="tabbar-show-text">显示文字</label>' +
+            '</div>' +
+          '</div>' +
+          '<div class="config-section">' +
+            '<div class="config-section-title">Tab项配置</div>' +
+            '<div class="tab-config-list" id="tab-config-list"></div>' +
+          '</div>';
+      }
+
+      /**
+       * 绑定底部导航属性面板的事件
+       */
+      function bindTabbarPropsEvents() {
+        // 底部导航栏显示开关（主页面和子页面都可用）
+        var showTabbarCheckbox = document.getElementById('page-show-tabbar');
+        if (showTabbarCheckbox) {
+          showTabbarCheckbox.addEventListener('change', function () {
+            var currentPage = getCurrentPage();
+            if (currentPage) {
+              currentPage.showTabbar = this.checked;
+              renderCanvas();
+            }
+          });
+        }
+
+        // Tab数量控制
+        var btnAddTab = document.getElementById('btn-add-tab');
+        var btnRemoveTab = document.getElementById('btn-remove-tab');
+        var tabbarCountEl = document.getElementById('tabbar-count');
+
+        if (btnAddTab) {
+          btnAddTab.onclick = function () {
+            if (tabItems.length >= 5) return;
+            var nextIndex = tabItems.length + 1;
+            tabItems = tabItems.map(function (tab) {
+              return { id: tab.id || 'tab-' + nextIndex, name: tab.name || 'Tab ' + nextIndex };
+            });
+            tabItems.push({ id: 'tab-' + Date.now(), name: 'Tab ' + nextIndex });
+            tabbarCountEl.textContent = tabItems.length + ' / 5';
+            renderCanvas();
+            renderTabbar();
+            renderTabConfigPanel();
+          };
+        }
+
+        if (btnRemoveTab) {
+          btnRemoveTab.onclick = function () {
+            if (tabItems.length <= 1) return;
+            tabItems.pop();
+            tabbarCountEl.textContent = tabItems.length + ' / 5';
+            renderCanvas();
+            renderTabbar();
+            renderTabConfigPanel();
+          };
+        }
+
+        // 样式配置
+        var defaultColorInput = document.getElementById('tabbar-default-color');
+        if (defaultColorInput) {
+          defaultColorInput.addEventListener('input', function () {
+            tabbarConfig.defaultColor = this.value;
+            renderCanvas();
+          });
+        }
+
+        var activeColorInput = document.getElementById('tabbar-active-color');
+        if (activeColorInput) {
+          activeColorInput.addEventListener('input', function () {
+            tabbarConfig.activeColor = this.value;
+            renderCanvas();
+          });
+        }
+
+        var fontSizeInput = document.getElementById('tabbar-font-size');
+        if (fontSizeInput) {
+          fontSizeInput.addEventListener('input', function () {
+            tabbarConfig.fontSize = Number(this.value);
+            renderCanvas();
+          });
+        }
+
+        var heightInput = document.getElementById('tabbar-height');
+        if (heightInput) {
+          heightInput.addEventListener('input', function () {
+            tabbarConfig.height = Number(this.value);
+            renderCanvas();
+          });
+        }
+
+        var bgColorInput = document.getElementById('tabbar-bg-color');
+        if (bgColorInput) {
+          bgColorInput.addEventListener('input', function () {
+            tabbarConfig.backgroundColor = this.value;
+            renderCanvas();
+          });
+        }
+
+        var borderColorInput = document.getElementById('tabbar-border-color');
+        if (borderColorInput) {
+          borderColorInput.addEventListener('input', function () {
+            tabbarConfig.borderColor = this.value;
+            renderCanvas();
+          });
+        }
+
+        var iconGapInput = document.getElementById('tabbar-icon-gap');
+        if (iconGapInput) {
+          iconGapInput.addEventListener('input', function () {
+            tabbarConfig.iconGap = Number(this.value);
+            renderCanvas();
+          });
+        }
+
+        var showTextInput = document.getElementById('tabbar-show-text');
+        if (showTextInput) {
+          showTextInput.addEventListener('change', function () {
+            tabbarConfig.showText = this.checked;
+            renderCanvas();
+          });
+        }
+
+        // 渲染Tab配置面板
+        renderTabConfigPanel();
+      }
+
+      /**
+       * 获取商城设置面板的HTML（未选中组件时的默认面板）
+       */
+      function getMallSettingsMarkup() {
+        const swatches = THEME_COLORS.map(function (theme) {
+          const isActive = mallSettings.themeColor === theme.value;
+          return (
+            '<button type="button" class="theme-color-swatch' + (isActive ? ' active' : '') + '" data-theme-value="' + theme.value + '">' +
+              '<span class="theme-color-dot" style="background:' + theme.value + ';"></span>' +
+              '<span>' + theme.name + '</span>' +
+            '</button>'
+          );
+        }).join('');
+        return (
+          '<div class="config-section">' +
+            '<div class="config-section-title">商城设置</div>' +
+            '<div class="config-item">' +
+              '<label>主题色</label>' +
+              '<div class="theme-color-swatches">' + swatches + '</div>' +
+            '</div>' +
+            '<div class="theme-color-tip">主题色将作用于商城整体视觉，如商品价格等着色元素。</div>' +
+          '</div>'
+        );
+      }
+
+      /**
+       * 绑定商城设置面板的事件
+       */
+      function bindMallSettingsEvents() {
+        propsComponentPanel.querySelectorAll('.theme-color-swatch').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            mallSettings.themeColor = this.dataset.themeValue;
+            applyMallTheme();
+            renderComponentPropsPanel();
+          });
+        });
+      }
+
+      /**
+       * 将主题色应用到画布预览
+       */
+      function applyMallTheme() {
+        phoneShell.style.setProperty('--theme-color', mallSettings.themeColor);
+      }
+
+      /**
+       * 打开富文本编辑器弹窗
+       */
+      function openRichTextEditorModal(rtConfig, defaultRichTextContent, renderCanvas) {
+        var modal = document.getElementById('modal-rich-text-editor');
+        var textarea = document.getElementById('rt-modal-content');
+        var preview = document.getElementById('rt-modal-preview');
+        var confirmBtn = document.getElementById('btn-rt-modal-confirm');
+        var closeBtn = modal.querySelector('.modal-close');
+        var cancelBtn = modal.querySelector('.modal-cancel');
+
+        // 初始化内容
+        var currentContent = rtConfig.content || defaultRichTextContent;
+        textarea.value = currentContent;
+        preview.innerHTML = currentContent;
+
+        // 如果是默认内容，清空
+        if (rtConfig.isDefaultContent !== false && rtConfig.content === defaultRichTextContent) {
+          textarea.value = '';
+          preview.innerHTML = '<p style="color:#999;">开始输入内容...</p>';
+        }
+
+        // 显示弹窗
+        modal.classList.add('show');
+
+        // 实时预览
+        function updatePreview() {
+          preview.innerHTML = textarea.value || '<p style="color:#999;">开始输入内容...</p>';
+        }
+
+        textarea.addEventListener('input', updatePreview);
+
+        // 工具栏按钮事件
+        function insertTag(tagStart, tagEnd) {
+          var start = textarea.selectionStart;
+          var end = textarea.selectionEnd;
+          var text = textarea.value;
+          var selectedText = text.substring(start, end) || '文本';
+          textarea.value = text.substring(0, start) + tagStart + selectedText + tagEnd + text.substring(end);
+          textarea.focus();
+          updatePreview();
+        }
+
+        document.getElementById('rt-modal-bold').onclick = function() { insertTag('<strong>', '</strong>'); };
+        document.getElementById('rt-modal-italic').onclick = function() { insertTag('<em>', '</em>'); };
+        document.getElementById('rt-modal-underline').onclick = function() { insertTag('<u>', '</u>'); };
+        document.getElementById('rt-modal-strikethrough').onclick = function() { insertTag('<s>', '</s>'); };
+        document.getElementById('rt-modal-h1').onclick = function() { insertTag('<h1>', '</h1>'); };
+        document.getElementById('rt-modal-h2').onclick = function() { insertTag('<h2>', '</h2>'); };
+        document.getElementById('rt-modal-p').onclick = function() { insertTag('<p>', '</p>'); };
+
+        document.getElementById('rt-modal-insert-image').onclick = function() {
+          var url = prompt('请输入图片URL：', 'https://via.placeholder.com/300x200');
+          if (url) {
+            insertTag('<img src="' + url + '" alt="图片" style="max-width:100%;border-radius:8px;" />', '');
+          }
+        };
+
+        document.getElementById('rt-modal-insert-link').onclick = function() {
+          var url = prompt('请输入链接URL：', 'https://');
+          var text = prompt('请输入链接文字：', '点击查看');
+          if (url && text) {
+            insertTag('<a href="' + url + '" target="_blank">', '</a>');
+            var start = textarea.selectionStart;
+            var end = textarea.selectionEnd;
+            textarea.value = textarea.value.substring(0, start) + text + textarea.value.substring(end);
+            updatePreview();
+          }
+        };
+
+        document.getElementById('rt-modal-insert-table').onclick = function() {
+          var tableHtml = '<table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:13px;">\n<thead>\n<tr style="background:#f5f5f5;"><th style="border:1px solid #ddd;padding:8px;">列1</th><th style="border:1px solid #ddd;padding:8px;">列2</th><th style="border:1px solid #ddd;padding:8px;">列3</th></tr>\n</thead>\n<tbody>\n<tr><td style="border:1px solid #ddd;padding:8px;">数据1</td><td style="border:1px solid #ddd;padding:8px;">数据2</td><td style="border:1px solid #ddd;padding:8px;">数据3</td></tr>\n</tbody>\n</table>';
+          insertTag(tableHtml, '');
+        };
+
+        document.getElementById('rt-modal-clear-format').onclick = function() {
+          var text = textarea.value;
+          var cleanText = text.replace(/<(strong|b|em|i|u|s|span|font|a|img|h[1-6]|table|thead|tbody|tr|th|td)[^>]*>|<\/(strong|b|em|i|u|s|span|font|a|h[1-6]|table|thead|tbody|tr|th|td)>/gi, function(match) {
+            if (match.startsWith('<img') || match.startsWith('<a ')) return '';
+            return '';
+          });
+          textarea.value = cleanText;
+          updatePreview();
+        };
+
+        // 关闭弹窗
+        function closeModal() {
+          modal.classList.remove('show');
+          textarea.removeEventListener('input', updatePreview);
+        }
+
+        closeBtn.onclick = closeModal;
+        cancelBtn.onclick = closeModal;
+        modal.onclick = function(e) {
+          if (e.target === modal) closeModal();
+        };
+
+        // 确认保存
+        confirmBtn.onclick = function() {
+          rtConfig.content = textarea.value;
+          rtConfig.isDefaultContent = false;
+          closeModal();
+          renderCanvas();
+          renderComponentPropsPanel();
+        };
+      }
+
+      function renderComponentPropsPanel() {
+        const currentPage = getCurrentPage();
+        propsComponentTitle.style.display = '';
+
+        // 检查是否选中顶部导航
+        if (selectedFloorId === '__top_nav__') {
+          propsCurrentFloor.textContent = '顶部导航 · 页面标题设置';
+          propsComponentPanel.className = '';
+          propsComponentPanel.innerHTML =
+            '<div class="config-section">' +
+              '<div class="config-section-title">页面名称</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>页面名称</label>' +
+                  '<input type="text" id="props-page-name-input" value="' + (currentPage ? currentPage.name : '') + '" placeholder="输入页面名称" />' +
+                '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="config-section">' +
+              '<div class="config-section-title">顶部导航栏标题</div>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>是否显示标题</label>' +
+                  '<select id="props-show-navbar-title">' +
+                    '<option value="true" ' + (currentPage && currentPage.showNavbarTitle !== false ? 'selected' : '') + '>显示</option>' +
+                    '<option value="false" ' + (currentPage && currentPage.showNavbarTitle === false ? 'selected' : '') + '>隐藏</option>' +
+                  '</select>' +
+                '</div>' +
+                '<div class="config-item" style="grid-column:1 / -1;">' +
+                  '<label>导航栏标题</label>' +
+                  '<input type="text" id="props-navbar-title-input" value="' + (currentPage ? (currentPage.navbarTitle || currentPage.name || '') : '') + '" placeholder="输入导航栏标题" />' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+
+          // 绑定页面名称输入事件
+          var pageNameInput = document.getElementById('props-page-name-input');
+          if (pageNameInput && currentPage) {
+            pageNameInput.addEventListener('input', function () {
+              currentPage.name = this.value;
+              renderPagesPanel();
+              renderCanvas();
+            });
+          }
+
+          // 绑定是否显示标题事件
+          var showNavbarTitleEl = document.getElementById('props-show-navbar-title');
+          if (showNavbarTitleEl && currentPage) {
+            showNavbarTitleEl.addEventListener('change', function () {
+              currentPage.showNavbarTitle = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 绑定导航栏标题输入事件
+          var navbarTitleInput = document.getElementById('props-navbar-title-input');
+          if (navbarTitleInput && currentPage) {
+            navbarTitleInput.addEventListener('input', function () {
+              currentPage.navbarTitle = this.value;
+              renderCanvas();
+            });
+          }
+          return;
+        }
+
+        // 检查是否选中底部导航
+        if (selectedFloorId === '__bottom_nav__') {
+          propsCurrentFloor.textContent = '底部导航 · Tab栏设置';
+          propsComponentPanel.className = '';
+          propsComponentPanel.innerHTML = getTabbarPropsMarkup();
+          bindTabbarPropsEvents();
+          return;
+        }
+
+        // 普通组件
+        const currentFloor = getCurrentFloor();
+        if (!currentFloor) {
+          // 未选中组件时，默认展示「商城设置」面板（隐藏「组件属性」标题）
+          propsCurrentFloor.textContent = '商城设置 · 全局主题';
+          propsComponentTitle.style.display = 'none';
+          propsComponentPanel.className = '';
+          propsComponentPanel.innerHTML = getMallSettingsMarkup();
+          bindMallSettingsEvents();
+          return;
+        }
+        propsCurrentFloor.textContent = currentFloor.name + ' · ' + currentFloor.desc;
+        propsComponentPanel.className = '';
+        propsComponentPanel.innerHTML = getComponentPropsMarkup(currentFloor);
+
+        // 商品列表组件事件绑定
+        if (currentFloor.type === 'goods-list') {
+          // 确保 goodsListConfig 存在
+          if (!currentFloor.goodsListConfig) {
+            currentFloor.goodsListConfig = {};
+          }
+          var config = currentFloor.goodsListConfig;
+
+          // 列表样式
+          var listStyleEl = document.getElementById('goods-list-style');
+          if (listStyleEl) {
+            listStyleEl.addEventListener('change', function () {
+              config.listStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 配置数据来源按钮
+          var configSourceBtn = document.getElementById('goods-list-config-source-btn');
+          if (configSourceBtn) {
+            configSourceBtn.addEventListener('click', function () {
+              var floorId = this.dataset.floorId;
+              openGoodsListSourceModal(floorId);
+            });
+          }
+
+          // 背景颜色
+          var bgColorEl = document.getElementById('goods-bg-color');
+          if (bgColorEl) {
+            bgColorEl.addEventListener('input', function () {
+              config.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 显示商品名称
+          var showSpuEl = document.getElementById('goods-show-spu');
+          if (showSpuEl) {
+            showSpuEl.addEventListener('change', function () {
+              config.showSpuName = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 显示规格值
+          var showSkuEl = document.getElementById('goods-show-sku');
+          if (showSkuEl) {
+            showSkuEl.addEventListener('change', function () {
+              config.showSkuSpec = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 显示销售价
+          var showPriceEl = document.getElementById('goods-show-price');
+          if (showPriceEl) {
+            showPriceEl.addEventListener('change', function () {
+              config.showPrice = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 显示标签
+          var showTagEl = document.getElementById('goods-show-tag');
+          if (showTagEl) {
+            showTagEl.addEventListener('change', function () {
+              config.showTag = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 购物车样式
+          var cartStyleEl = document.getElementById('goods-cart-style');
+          if (cartStyleEl) {
+            cartStyleEl.addEventListener('change', function () {
+              config.cartStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 角标类型
+          var cornerTagEl = document.getElementById('goods-corner-tag');
+          if (cornerTagEl) {
+            cornerTagEl.addEventListener('change', function () {
+              config.cornerTag = this.value;
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          }
+
+          // 自定义角标文字
+          var customCornerEl = document.getElementById('goods-custom-corner');
+          if (customCornerEl) {
+            customCornerEl.addEventListener('input', function () {
+              config.customCornerTag = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 价格显示类型
+          var priceDisplayEl = document.getElementById('goods-price-display');
+          if (priceDisplayEl) {
+            priceDisplayEl.addEventListener('change', function () {
+              config.priceDisplay = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 显示划线价
+          var showOriginalEl = document.getElementById('goods-show-original');
+          if (showOriginalEl) {
+            showOriginalEl.addEventListener('change', function () {
+              config.showOriginalPrice = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 组件边角样式
+          var cornerStyleEl = document.getElementById('goods-corner-style');
+          if (cornerStyleEl) {
+            cornerStyleEl.addEventListener('change', function () {
+              config.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 页面边距
+          var pagePaddingEl = document.getElementById('goods-page-padding');
+          if (pagePaddingEl) {
+            pagePaddingEl.addEventListener('input', function () {
+              config.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 商品间距
+          var goodsPaddingEl = document.getElementById('goods-padding');
+          if (goodsPaddingEl) {
+            goodsPaddingEl.addEventListener('input', function () {
+              config.goodsPadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 商品卡片倒角
+          var goodsCornerEl = document.getElementById('goods-goods-corner');
+          if (goodsCornerEl) {
+            goodsCornerEl.addEventListener('change', function () {
+              config.goodsCorner = this.value;
+              renderCanvas();
+            });
+          }
+        }
+
+        // 标题组件事件绑定
+        if (currentFloor.type === 'title') {
+          if (!currentFloor.titleConfig) currentFloor.titleConfig = {};
+          var titleConfig = currentFloor.titleConfig;
+
+          // 标题内容
+          var titleContentEl = document.getElementById('title-content');
+          if (titleContentEl) {
+            titleContentEl.addEventListener('input', function () {
+              titleConfig.title = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 副标题
+          var titleSubtitleEl = document.getElementById('title-subtitle');
+          if (titleSubtitleEl) {
+            titleSubtitleEl.addEventListener('input', function () {
+              titleConfig.subtitle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 对齐方式
+          var titleAlignEl = document.getElementById('title-align');
+          if (titleAlignEl) {
+            titleAlignEl.addEventListener('change', function () {
+              titleConfig.align = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 标题字号
+          var titleSizeEl = document.getElementById('title-size');
+          if (titleSizeEl) {
+            titleSizeEl.addEventListener('change', function () {
+              titleConfig.titleSize = parseInt(this.value, 10);
+              renderCanvas();
+            });
+          }
+
+          // 标题颜色
+          var titleColorEl = document.getElementById('title-color');
+          if (titleColorEl) {
+            titleColorEl.addEventListener('input', function () {
+              titleConfig.titleColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 标题粗细
+          var titleWeightEl = document.getElementById('title-weight');
+          if (titleWeightEl) {
+            titleWeightEl.addEventListener('change', function () {
+              titleConfig.titleWeight = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 副标题字号
+          var titleSubtitleSizeEl = document.getElementById('title-subtitle-size');
+          if (titleSubtitleSizeEl) {
+            titleSubtitleSizeEl.addEventListener('change', function () {
+              titleConfig.subtitleSize = parseInt(this.value, 10);
+              renderCanvas();
+            });
+          }
+
+          // 副标题颜色
+          var titleSubtitleColorEl = document.getElementById('title-subtitle-color');
+          if (titleSubtitleColorEl) {
+            titleSubtitleColorEl.addEventListener('input', function () {
+              titleConfig.subtitleColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 背景颜色
+          var titleBgColorEl = document.getElementById('title-bg-color');
+          if (titleBgColorEl) {
+            titleBgColorEl.addEventListener('input', function () {
+              titleConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 上边距
+          var titlePaddingTopEl = document.getElementById('title-padding-top');
+          if (titlePaddingTopEl) {
+            titlePaddingTopEl.addEventListener('input', function () {
+              titleConfig.paddingTop = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 下边距
+          var titlePaddingBottomEl = document.getElementById('title-padding-bottom');
+          if (titlePaddingBottomEl) {
+            titlePaddingBottomEl.addEventListener('input', function () {
+              titleConfig.paddingBottom = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 左边距
+          var titlePaddingLeftEl = document.getElementById('title-padding-left');
+          if (titlePaddingLeftEl) {
+            titlePaddingLeftEl.addEventListener('input', function () {
+              titleConfig.paddingLeft = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 右边距
+          var titlePaddingRightEl = document.getElementById('title-padding-right');
+          if (titlePaddingRightEl) {
+            titlePaddingRightEl.addEventListener('input', function () {
+              titleConfig.paddingRight = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 边角样式
+          var titleCornerStyleEl = document.getElementById('title-corner-style');
+          if (titleCornerStyleEl) {
+            titleCornerStyleEl.addEventListener('change', function () {
+              titleConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+        }
+
+        // 文本组件事件绑定
+        if (currentFloor.type === 'text') {
+          if (!currentFloor.textConfig) currentFloor.textConfig = {};
+          var textConfig = currentFloor.textConfig;
+
+          // 文本内容
+          var textContentEl = document.getElementById('text-content');
+          if (textContentEl) {
+            textContentEl.addEventListener('input', function () {
+              textConfig.content = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 对齐方式
+          var textAlignEl = document.getElementById('text-align');
+          if (textAlignEl) {
+            textAlignEl.addEventListener('change', function () {
+              textConfig.align = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 字体大小
+          var textFontSizeEl = document.getElementById('text-font-size');
+          if (textFontSizeEl) {
+            textFontSizeEl.addEventListener('change', function () {
+              textConfig.fontSize = parseInt(this.value, 10);
+              renderCanvas();
+            });
+          }
+
+          // 文字颜色
+          var textFontColorEl = document.getElementById('text-font-color');
+          if (textFontColorEl) {
+            textFontColorEl.addEventListener('input', function () {
+              textConfig.fontColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 字体粗细
+          var textFontWeightEl = document.getElementById('text-font-weight');
+          if (textFontWeightEl) {
+            textFontWeightEl.addEventListener('change', function () {
+              textConfig.fontWeight = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 行高
+          var textLineHeightEl = document.getElementById('text-line-height');
+          if (textLineHeightEl) {
+            textLineHeightEl.addEventListener('change', function () {
+              textConfig.lineHeight = parseFloat(this.value);
+              renderCanvas();
+            });
+          }
+
+          // 背景颜色
+          var textBgColorEl = document.getElementById('text-bg-color');
+          if (textBgColorEl) {
+            textBgColorEl.addEventListener('input', function () {
+              textConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 上边距
+          var textPaddingTopEl = document.getElementById('text-padding-top');
+          if (textPaddingTopEl) {
+            textPaddingTopEl.addEventListener('input', function () {
+              textConfig.paddingTop = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 下边距
+          var textPaddingBottomEl = document.getElementById('text-padding-bottom');
+          if (textPaddingBottomEl) {
+            textPaddingBottomEl.addEventListener('input', function () {
+              textConfig.paddingBottom = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 左边距
+          var textPaddingLeftEl = document.getElementById('text-padding-left');
+          if (textPaddingLeftEl) {
+            textPaddingLeftEl.addEventListener('input', function () {
+              textConfig.paddingLeft = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 右边距
+          var textPaddingRightEl = document.getElementById('text-padding-right');
+          if (textPaddingRightEl) {
+            textPaddingRightEl.addEventListener('input', function () {
+              textConfig.paddingRight = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 边角样式
+          var textCornerStyleEl = document.getElementById('text-corner-style');
+          if (textCornerStyleEl) {
+            textCornerStyleEl.addEventListener('change', function () {
+              textConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+        }
+
+        // 关联链接组件事件绑定
+        if (currentFloor.type === 'link') {
+          if (!currentFloor.linkConfig) currentFloor.linkConfig = {};
+          var linkConfig = currentFloor.linkConfig;
+
+          // 链接文字
+          var linkTextEl = document.getElementById('link-text');
+          if (linkTextEl) {
+            linkTextEl.addEventListener('input', function () {
+              linkConfig.text = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 链接类型
+          var linkTypeEl = document.getElementById('link-type');
+          if (linkTypeEl) {
+            linkTypeEl.addEventListener('change', function () {
+              linkConfig.linkType = this.value;
+            });
+          }
+
+          // 链接地址
+          var linkUrlEl = document.getElementById('link-url');
+          if (linkUrlEl) {
+            linkUrlEl.addEventListener('input', function () {
+              linkConfig.linkUrl = this.value;
+            });
+          }
+
+          // 文字颜色
+          var linkTextColorEl = document.getElementById('link-text-color');
+          if (linkTextColorEl) {
+            linkTextColorEl.addEventListener('input', function () {
+              linkConfig.textColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 字体大小
+          var linkFontSizeEl = document.getElementById('link-font-size');
+          if (linkFontSizeEl) {
+            linkFontSizeEl.addEventListener('change', function () {
+              linkConfig.fontSize = parseInt(this.value, 10);
+              renderCanvas();
+            });
+          }
+
+          // 下划线
+          var linkTextDecorationEl = document.getElementById('link-text-decoration');
+          if (linkTextDecorationEl) {
+            linkTextDecorationEl.addEventListener('change', function () {
+              linkConfig.textDecoration = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 背景颜色
+          var linkBgColorEl = document.getElementById('link-bg-color');
+          if (linkBgColorEl) {
+            linkBgColorEl.addEventListener('input', function () {
+              linkConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 上边距
+          var linkPaddingTopEl = document.getElementById('link-padding-top');
+          if (linkPaddingTopEl) {
+            linkPaddingTopEl.addEventListener('input', function () {
+              linkConfig.paddingTop = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 下边距
+          var linkPaddingBottomEl = document.getElementById('link-padding-bottom');
+          if (linkPaddingBottomEl) {
+            linkPaddingBottomEl.addEventListener('input', function () {
+              linkConfig.paddingBottom = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 左边距
+          var linkPaddingLeftEl = document.getElementById('link-padding-left');
+          if (linkPaddingLeftEl) {
+            linkPaddingLeftEl.addEventListener('input', function () {
+              linkConfig.paddingLeft = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 右边距
+          var linkPaddingRightEl = document.getElementById('link-padding-right');
+          if (linkPaddingRightEl) {
+            linkPaddingRightEl.addEventListener('input', function () {
+              linkConfig.paddingRight = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 边角样式
+          var linkCornerStyleEl = document.getElementById('link-corner-style');
+          if (linkCornerStyleEl) {
+            linkCornerStyleEl.addEventListener('change', function () {
+              linkConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+        }
+
+        // 轮播图组件事件绑定
+        if (currentFloor.type === 'carousel') {
+          if (!currentFloor.carouselConfig) currentFloor.carouselConfig = {};
+          var carouselConfig = currentFloor.carouselConfig;
+
+          // 确保 slides 数组存在
+          if (!Array.isArray(carouselConfig.slides) || carouselConfig.slides.length === 0) {
+            carouselConfig.slides = [
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+            ];
+          }
+
+          // 添加图片按钮
+          var addSlideBtn = document.getElementById('carousel-add-slide');
+          if (addSlideBtn) {
+            addSlideBtn.addEventListener('click', function () {
+              carouselConfig.slides.push({ image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' });
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          }
+
+          // 为每个轮播项绑定图片选择器事件
+          carouselConfig.slides.forEach(function(slide, index) {
+            bindImageSelectorEvents({
+              fileInputId: 'carousel-file-input-' + index,
+              libraryBtnId: 'carousel-library-btn-' + index,
+              previewId: 'carousel-img-preview-' + index,
+              onImageSelected: function(imageUrl) {
+                carouselConfig.slides[index].image = imageUrl;
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转类型选择
+          propsComponentPanel.querySelectorAll('.carousel-jump-type').forEach(function (selectEl) {
+            selectEl.addEventListener('change', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (carouselConfig.slides[idx]) {
+                carouselConfig.slides[idx].jumpType = this.value;
+                carouselConfig.slides[idx].jumpTarget = '';
+                renderComponentPropsPanel();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转目标输入（普通输入框）
+          propsComponentPanel.querySelectorAll('.carousel-jump-target').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (carouselConfig.slides[idx]) {
+                carouselConfig.slides[idx].jumpTarget = this.value.trim();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 绑定可搜索下拉框事件（分类、品牌、标签）
+          bindSearchableDropdownEvents(propsComponentPanel, 'carousel-jump-target', function(idx, value) {
+            if (carouselConfig.slides[idx]) {
+              carouselConfig.slides[idx].jumpTarget = value;
+              renderCanvas();
+            }
+          });
+
+          // 绑定商品选择事件
+          bindProductSelectEvents(propsComponentPanel, 'carousel-jump-target', function(idx, value) {
+            if (carouselConfig.slides[idx]) {
+              carouselConfig.slides[idx].jumpTarget = value;
+              renderCanvas();
+            }
+          });
+
+          // 删除图片按钮
+          propsComponentPanel.querySelectorAll('.carousel-slide-remove').forEach(function (btnEl) {
+            btnEl.addEventListener('click', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              carouselConfig.slides.splice(idx, 1);
+              if (carouselConfig.slides.length === 0) {
+                carouselConfig.slides.push({ image: '', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' });
+              }
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          });
+
+          // 风格设置
+          var styleModeEl = document.getElementById('carousel-style-mode');
+          if (styleModeEl) {
+            styleModeEl.addEventListener('change', function () {
+              carouselConfig.styleMode = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 容器边角
+          var cornerStyleEl = document.getElementById('carousel-corner-style');
+          if (cornerStyleEl) {
+            cornerStyleEl.addEventListener('change', function () {
+              carouselConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 图片边角
+          var imageCornerEl = document.getElementById('carousel-image-corner');
+          if (imageCornerEl) {
+            imageCornerEl.addEventListener('change', function () {
+              carouselConfig.imageCorner = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 自动轮播
+          var autoplayEl = document.getElementById('carousel-autoplay');
+          if (autoplayEl) {
+            autoplayEl.addEventListener('change', function () {
+              carouselConfig.autoplay = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 轮播间隔
+          var intervalEl = document.getElementById('carousel-interval');
+          if (intervalEl) {
+            intervalEl.addEventListener('input', function () {
+              carouselConfig.interval = Math.max(1000, Math.min(10000, parseInt(this.value, 10) || 3000));
+              renderCanvas();
+            });
+          }
+
+          // 背景颜色
+          var bgColorEl = document.getElementById('carousel-bg-color');
+          if (bgColorEl) {
+            bgColorEl.addEventListener('input', function () {
+              carouselConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 圆点样式
+          var dotStyleEl = document.getElementById('carousel-dot-style');
+          if (dotStyleEl) {
+            dotStyleEl.addEventListener('change', function () {
+              carouselConfig.dotStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 圆点位置
+          var dotPositionEl = document.getElementById('carousel-dot-position');
+          if (dotPositionEl) {
+            dotPositionEl.addEventListener('change', function () {
+              carouselConfig.dotPosition = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 页面边距
+          var pagePaddingEl = document.getElementById('carousel-page-padding');
+          if (pagePaddingEl) {
+            pagePaddingEl.addEventListener('input', function () {
+              carouselConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+        }
+
+        // 图文导航组件事件绑定
+        if (currentFloor.type === 'icon-nav') {
+          if (!currentFloor.iconNavConfig) currentFloor.iconNavConfig = {};
+          var iconNavConfig = currentFloor.iconNavConfig;
+
+          // 确保 navItems 数组存在
+          if (!Array.isArray(iconNavConfig.navItems) || iconNavConfig.navItems.length === 0) {
+            iconNavConfig.navItems = [
+              { icon: '⚡', image: '', text: '限时秒杀', link: '' },
+              { icon: '🏷️', image: '', text: '品牌特卖', link: '' },
+              { icon: '🆕', image: '', text: '新品上市', link: '' },
+              { icon: '🔥', image: '', text: '热销榜', link: '' },
+              { icon: '🎫', image: '', text: '领券中心', link: '' },
+            ];
+          }
+
+          // 模板类型
+          var templateEl = document.getElementById('icon-nav-template');
+          if (templateEl) {
+            templateEl.addEventListener('change', function () {
+              iconNavConfig.template = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 布局样式变化 - 控制行数选项显示
+          var layoutEl = document.getElementById('icon-nav-layout');
+          if (layoutEl) {
+            layoutEl.addEventListener('change', function () {
+              iconNavConfig.layoutStyle = this.value;
+              // 滑动模式隐藏行数选项
+              var rowsWrapper = document.getElementById('icon-nav-rows-wrapper');
+              if (rowsWrapper) {
+                rowsWrapper.style.display = this.value === 'scroll' ? 'none' : 'block';
+              }
+              renderCanvas();
+            });
+          }
+
+          // 显示行数
+          var rowsEl = document.getElementById('icon-nav-rows');
+          if (rowsEl) {
+            rowsEl.addEventListener('change', function () {
+              iconNavConfig.rows = parseInt(this.value, 10);
+              renderCanvas();
+            });
+          }
+
+          // 添加导航项按钮（最多12个）
+          var addItemBtn = document.getElementById('icon-nav-add-item');
+          if (addItemBtn) {
+            addItemBtn.addEventListener('click', function () {
+              if (iconNavConfig.navItems.length >= 12) return;
+              iconNavConfig.navItems.push({ icon: '📌', image: '', text: '导航' + (iconNavConfig.navItems.length + 1), jumpType: 'none', jumpTarget: '' });
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          }
+
+          // 导航项图标输入
+          propsComponentPanel.querySelectorAll('.icon-nav-item-icon').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (iconNavConfig.navItems[idx]) {
+                iconNavConfig.navItems[idx].icon = this.value.trim();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 导航项文字输入
+          propsComponentPanel.querySelectorAll('.icon-nav-item-text').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (iconNavConfig.navItems[idx]) {
+                iconNavConfig.navItems[idx].text = this.value.trim();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 为每个导航项绑定图片选择器事件
+          iconNavConfig.navItems.forEach(function(item, index) {
+            bindImageSelectorEvents({
+              fileInputId: 'icon-nav-file-input-' + index,
+              libraryBtnId: 'icon-nav-library-btn-' + index,
+              previewId: 'icon-nav-img-preview-' + index,
+              onImageSelected: function(imageUrl) {
+                iconNavConfig.navItems[index].image = imageUrl;
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转类型选择
+          propsComponentPanel.querySelectorAll('.icon-nav-jump-type').forEach(function (selectEl) {
+            selectEl.addEventListener('change', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (iconNavConfig.navItems[idx]) {
+                iconNavConfig.navItems[idx].jumpType = this.value;
+                iconNavConfig.navItems[idx].jumpTarget = '';
+                renderComponentPropsPanel();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转目标输入（普通输入框）
+          propsComponentPanel.querySelectorAll('.icon-nav-jump-target').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (iconNavConfig.navItems[idx]) {
+                iconNavConfig.navItems[idx].jumpTarget = this.value.trim();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 绑定可搜索下拉框事件（分类、品牌、标签）
+          bindSearchableDropdownEvents(propsComponentPanel, 'icon-nav-jump-target', function(idx, value) {
+            if (iconNavConfig.navItems[idx]) {
+              iconNavConfig.navItems[idx].jumpTarget = value;
+              renderCanvas();
+            }
+          });
+
+          // 绑定商品选择事件
+          bindProductSelectEvents(propsComponentPanel, 'icon-nav-jump-target', function(idx, value) {
+            if (iconNavConfig.navItems[idx]) {
+              iconNavConfig.navItems[idx].jumpTarget = value;
+              renderCanvas();
+            }
+          });
+
+          // 删除导航项按钮
+          propsComponentPanel.querySelectorAll('.icon-nav-item-remove').forEach(function (btnEl) {
+            btnEl.addEventListener('click', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              iconNavConfig.navItems.splice(idx, 1);
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          });
+
+          // 背景颜色
+          var bgColorEl = document.getElementById('icon-nav-bg-color');
+          if (bgColorEl) {
+            bgColorEl.addEventListener('input', function () {
+              iconNavConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 文字颜色
+          var textColorEl = document.getElementById('icon-nav-text-color');
+          if (textColorEl) {
+            textColorEl.addEventListener('input', function () {
+              iconNavConfig.textColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 文字大小
+          var textSizeEl = document.getElementById('icon-nav-text-size');
+          if (textSizeEl) {
+            textSizeEl.addEventListener('change', function () {
+              iconNavConfig.textSize = parseInt(this.value, 10);
+              renderCanvas();
+            });
+          }
+
+          // 容器边角
+          var cornerStyleEl = document.getElementById('icon-nav-corner-style');
+          if (cornerStyleEl) {
+            cornerStyleEl.addEventListener('change', function () {
+              iconNavConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 图片边角
+          var imageCornerEl = document.getElementById('icon-nav-image-corner');
+          if (imageCornerEl) {
+            imageCornerEl.addEventListener('change', function () {
+              iconNavConfig.imageCorner = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 页面边距
+          var pagePaddingEl = document.getElementById('icon-nav-page-padding');
+          if (pagePaddingEl) {
+            pagePaddingEl.addEventListener('input', function () {
+              iconNavConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+        }
+
+        // 悬浮组件事件绑定
+        if (currentFloor.type === 'float-button') {
+          if (!currentFloor.floatButtonConfig) currentFloor.floatButtonConfig = {};
+          var floatButtonConfig = currentFloor.floatButtonConfig;
+
+          // 确保 buttons 数组存在
+          if (!Array.isArray(floatButtonConfig.buttons) || floatButtonConfig.buttons.length === 0) {
+            floatButtonConfig.buttons = [
+              { id: 'btn-' + Date.now(), type: 'back-top', enabled: true, name: '置顶', backgroundColor: '#ff6b35', iconColor: '#ffffff', buttonSize: 44, borderRadius: 50, jumpType: 'none', jumpTarget: '' }
+            ];
+          }
+
+          // 悬浮位置
+          var positionEl = document.getElementById('float-position');
+          if (positionEl) {
+            positionEl.addEventListener('change', function () {
+              floatButtonConfig.position = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 距底部距离
+          var bottomMarginEl = document.getElementById('float-bottom-margin');
+          if (bottomMarginEl) {
+            bottomMarginEl.addEventListener('input', function () {
+              floatButtonConfig.bottomMargin = Math.max(50, Math.min(200, parseInt(this.value, 10) || 80));
+              renderCanvas();
+            });
+          }
+
+          // 按钮间距
+          var buttonGapEl = document.getElementById('float-button-gap');
+          if (buttonGapEl) {
+            buttonGapEl.addEventListener('input', function () {
+              floatButtonConfig.buttonGap = Math.max(8, Math.min(24, parseInt(this.value, 10) || 12));
+              renderCanvas();
+            });
+          }
+
+          // 添加按钮
+          var addBtnEl = document.getElementById('float-add-btn');
+          if (addBtnEl) {
+            addBtnEl.addEventListener('click', function () {
+              if (floatButtonConfig.buttons.length < 3) {
+                floatButtonConfig.buttons.push({
+                  id: 'btn-' + Date.now(),
+                  type: 'cart',
+                  enabled: true,
+                  name: '购物车',
+                  backgroundColor: '#ff6b35',
+                  iconColor: '#ffffff',
+                  buttonSize: 44,
+                  borderRadius: 50,
+                  jumpType: 'page',
+                  jumpTarget: 'cart'
+                });
+                renderComponentPropsPanel();
+                renderCanvas();
+              }
+            });
+          }
+
+          // 按钮类型选择
+          propsComponentPanel.querySelectorAll('.float-btn-type').forEach(function (selectEl) {
+            selectEl.addEventListener('change', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (floatButtonConfig.buttons[idx]) {
+                floatButtonConfig.buttons[idx].type = this.value;
+                // 更新默认名称
+                if (this.value === 'back-top') {
+                  floatButtonConfig.buttons[idx].name = '置顶';
+                  floatButtonConfig.buttons[idx].jumpType = 'none';
+                } else if (this.value === 'cart') {
+                  floatButtonConfig.buttons[idx].name = '购物车';
+                  floatButtonConfig.buttons[idx].jumpType = 'page';
+                  floatButtonConfig.buttons[idx].jumpTarget = 'cart';
+                } else if (this.value === 'service') {
+                  floatButtonConfig.buttons[idx].name = '客服';
+                  floatButtonConfig.buttons[idx].jumpType = 'page';
+                  floatButtonConfig.buttons[idx].jumpTarget = 'service';
+                }
+                renderComponentPropsPanel();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 按钮名称
+          propsComponentPanel.querySelectorAll('.float-btn-name').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (floatButtonConfig.buttons[idx]) {
+                floatButtonConfig.buttons[idx].name = this.value.trim();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 背景颜色
+          propsComponentPanel.querySelectorAll('.float-btn-bg-color').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (floatButtonConfig.buttons[idx]) {
+                floatButtonConfig.buttons[idx].backgroundColor = this.value;
+                renderCanvas();
+              }
+            });
+          });
+
+          // 图标颜色
+          propsComponentPanel.querySelectorAll('.float-btn-icon-color').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (floatButtonConfig.buttons[idx]) {
+                floatButtonConfig.buttons[idx].iconColor = this.value;
+                renderCanvas();
+              }
+            });
+          });
+
+          // 按钮大小
+          propsComponentPanel.querySelectorAll('.float-btn-size').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (floatButtonConfig.buttons[idx]) {
+                floatButtonConfig.buttons[idx].buttonSize = Math.max(32, Math.min(60, parseInt(this.value, 10) || 44));
+                renderCanvas();
+              }
+            });
+          });
+
+          // 圆角
+          propsComponentPanel.querySelectorAll('.float-btn-radius').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (floatButtonConfig.buttons[idx]) {
+                floatButtonConfig.buttons[idx].borderRadius = Math.max(0, Math.min(50, parseInt(this.value, 10) || 50));
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转类型
+          propsComponentPanel.querySelectorAll('.float-btn-jump-type').forEach(function (selectEl) {
+            selectEl.addEventListener('change', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (floatButtonConfig.buttons[idx]) {
+                floatButtonConfig.buttons[idx].jumpType = this.value;
+                floatButtonConfig.buttons[idx].jumpTarget = '';
+                renderComponentPropsPanel();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转目标
+          propsComponentPanel.querySelectorAll('.float-btn-jump-target').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (floatButtonConfig.buttons[idx]) {
+                floatButtonConfig.buttons[idx].jumpTarget = this.value.trim();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 删除按钮
+          propsComponentPanel.querySelectorAll('.float-btn-remove').forEach(function (btnEl) {
+            btnEl.addEventListener('click', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              floatButtonConfig.buttons.splice(idx, 1);
+              if (floatButtonConfig.buttons.length === 0) {
+                floatButtonConfig.buttons.push({
+                  id: 'btn-' + Date.now(),
+                  type: 'back-top',
+                  enabled: true,
+                  name: '置顶',
+                  backgroundColor: '#ff6b35',
+                  iconColor: '#ffffff',
+                  buttonSize: 44,
+                  borderRadius: 50,
+                  jumpType: 'none',
+                  jumpTarget: ''
+                });
+              }
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          });
+        }
+
+        // 电梯导航组件事件绑定
+        if (currentFloor.type === 'elevator-nav') {
+          if (!currentFloor.elevatorNavConfig) currentFloor.elevatorNavConfig = {};
+          var elevatorNavConfig = currentFloor.elevatorNavConfig;
+
+          // 确保 tags 数组存在
+          if (!Array.isArray(elevatorNavConfig.tags) || elevatorNavConfig.tags.length === 0) {
+            elevatorNavConfig.tags = [
+              { text: '推荐', targetFloorId: '' },
+              { text: '新品', targetFloorId: '' },
+              { text: '热销', targetFloorId: '' },
+              { text: '促销', targetFloorId: '' },
+            ];
+          }
+
+          // 模板类型
+          var templateEl = document.getElementById('elevator-nav-template');
+          if (templateEl) {
+            templateEl.addEventListener('change', function () {
+              elevatorNavConfig.templateType = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 展示方式
+          var displayEl = document.getElementById('elevator-nav-display');
+          if (displayEl) {
+            displayEl.addEventListener('change', function () {
+              elevatorNavConfig.displayMode = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 标签风格
+          var tagStyleEl = document.getElementById('elevator-nav-tag-style');
+          if (tagStyleEl) {
+            tagStyleEl.addEventListener('change', function () {
+              elevatorNavConfig.tagStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 添加标签按钮
+          var addTagBtn = document.getElementById('elevator-nav-add-tag');
+          if (addTagBtn) {
+            addTagBtn.addEventListener('click', function () {
+              elevatorNavConfig.tags.push({ text: '标签' + (elevatorNavConfig.tags.length + 1), image: '', targetFloorId: '' });
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          }
+
+          // 标签文字输入
+          propsComponentPanel.querySelectorAll('.elevator-nav-tag-text').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (elevatorNavConfig.tags[idx]) {
+                elevatorNavConfig.tags[idx].text = this.value.trim();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 标签目标组件选择
+          propsComponentPanel.querySelectorAll('.elevator-nav-tag-target').forEach(function (selectEl) {
+            selectEl.addEventListener('change', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (elevatorNavConfig.tags[idx]) {
+                elevatorNavConfig.tags[idx].targetFloorId = this.value;
+              }
+            });
+          });
+
+          // 为每个标签绑定图片选择器事件
+          elevatorNavConfig.tags.forEach(function(tag, index) {
+            bindImageSelectorEvents({
+              fileInputId: 'elevator-nav-file-input-' + index,
+              libraryBtnId: 'elevator-nav-library-btn-' + index,
+              previewId: 'elevator-nav-img-preview-' + index,
+              onImageSelected: function(imageUrl) {
+                elevatorNavConfig.tags[index].image = imageUrl;
+                renderCanvas();
+              }
+            });
+          });
+
+          // 删除标签按钮
+          propsComponentPanel.querySelectorAll('.elevator-nav-tag-remove').forEach(function (btnEl) {
+            btnEl.addEventListener('click', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              elevatorNavConfig.tags.splice(idx, 1);
+              if (elevatorNavConfig.tags.length < 2) {
+                elevatorNavConfig.tags.push({ text: '标签', image: '', targetFloorId: '' });
+              }
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          });
+
+          // 选中颜色（下划线和文字色）
+          var activeBgEl = document.getElementById('elevator-nav-active-bg');
+          if (activeBgEl) {
+            activeBgEl.addEventListener('input', function () {
+              elevatorNavConfig.activeBgColor = this.value;
+              // 下划线模式时，文字色与下划线色保持一致
+              if (elevatorNavConfig.tagStyle === 'underline') {
+                elevatorNavConfig.activeTextColor = this.value;
+              }
+              renderCanvas();
+            });
+          }
+
+          // 默认文字色
+          var defaultTextEl = document.getElementById('elevator-nav-default-text');
+          if (defaultTextEl) {
+            defaultTextEl.addEventListener('input', function () {
+              elevatorNavConfig.defaultTextColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 组件背景色
+          var bgColorEl = document.getElementById('elevator-nav-bg-color');
+          if (bgColorEl) {
+            bgColorEl.addEventListener('input', function () {
+              elevatorNavConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 页面边距
+          var pagePaddingEl = document.getElementById('elevator-nav-page-padding');
+          if (pagePaddingEl) {
+            pagePaddingEl.addEventListener('input', function () {
+              elevatorNavConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 开启吸顶
+          var enableStickyEl = document.getElementById('elevator-nav-enable-sticky');
+          if (enableStickyEl) {
+            enableStickyEl.addEventListener('change', function () {
+              elevatorNavConfig.enableSticky = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 吸顶距离
+          var stickyTopEl = document.getElementById('elevator-nav-sticky-top');
+          if (stickyTopEl) {
+            stickyTopEl.addEventListener('input', function () {
+              elevatorNavConfig.stickyTop = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+        }
+
+        // 个性化推荐组件事件绑定
+        if (currentFloor.type === 'personal-recommend') {
+          if (!currentFloor.personalRecommendConfig) currentFloor.personalRecommendConfig = {};
+          var personalRecommendConfig = currentFloor.personalRecommendConfig;
+
+          // 推荐规则
+          var ruleEl = document.getElementById('personal-recommend-rule');
+          if (ruleEl) {
+            ruleEl.addEventListener('change', function () {
+              personalRecommendConfig.recommendRule = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 换一换功能
+          var refreshEl = document.getElementById('personal-recommend-refresh');
+          if (refreshEl) {
+            refreshEl.addEventListener('change', function () {
+              personalRecommendConfig.enableRefresh = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 商品数量
+          var countEl = document.getElementById('personal-recommend-count');
+          if (countEl) {
+            countEl.addEventListener('change', function () {
+              personalRecommendConfig.goodsCount = parseInt(this.value, 10);
+              renderCanvas();
+            });
+          }
+
+          // 显示标题
+          var showTitleEl = document.getElementById('personal-recommend-show-title');
+          if (showTitleEl) {
+            showTitleEl.addEventListener('change', function () {
+              personalRecommendConfig.showTitle = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 标题文字
+          var titleEl = document.getElementById('personal-recommend-title');
+          if (titleEl) {
+            titleEl.addEventListener('input', function () {
+              personalRecommendConfig.title = this.value.trim();
+              renderCanvas();
+            });
+          }
+
+          // 列表样式
+          var listStyleEl = document.getElementById('personal-recommend-list-style');
+          if (listStyleEl) {
+            listStyleEl.addEventListener('change', function () {
+              personalRecommendConfig.listStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 显示商品名称
+          var showNameEl = document.getElementById('personal-recommend-show-name');
+          if (showNameEl) {
+            showNameEl.addEventListener('change', function () {
+              personalRecommendConfig.showGoodsName = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 显示销售价
+          var showPriceEl = document.getElementById('personal-recommend-show-price');
+          if (showPriceEl) {
+            showPriceEl.addEventListener('change', function () {
+              personalRecommendConfig.showPrice = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 显示销量
+          var showSalesEl = document.getElementById('personal-recommend-show-sales');
+          if (showSalesEl) {
+            showSalesEl.addEventListener('change', function () {
+              personalRecommendConfig.showSales = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 显示划线价
+          var showOriginalEl = document.getElementById('personal-recommend-show-original');
+          if (showOriginalEl) {
+            showOriginalEl.addEventListener('change', function () {
+              personalRecommendConfig.showOriginalPrice = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 购物车样式
+          var cartStyleEl = document.getElementById('personal-recommend-cart-style');
+          if (cartStyleEl) {
+            cartStyleEl.addEventListener('change', function () {
+              personalRecommendConfig.cartStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 背景颜色
+          var bgColorEl = document.getElementById('personal-recommend-bg-color');
+          if (bgColorEl) {
+            bgColorEl.addEventListener('input', function () {
+              personalRecommendConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 组件边角样式
+          var cornerStyleEl = document.getElementById('personal-recommend-corner-style');
+          if (cornerStyleEl) {
+            cornerStyleEl.addEventListener('change', function () {
+              personalRecommendConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 商品卡片倒角
+          var goodsCornerEl = document.getElementById('personal-recommend-goods-corner');
+          if (goodsCornerEl) {
+            goodsCornerEl.addEventListener('change', function () {
+              personalRecommendConfig.goodsCorner = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 页面边距
+          var pagePaddingEl = document.getElementById('personal-recommend-page-padding');
+          if (pagePaddingEl) {
+            pagePaddingEl.addEventListener('input', function () {
+              personalRecommendConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 商品间距
+          var goodsPaddingEl = document.getElementById('personal-recommend-goods-padding');
+          if (goodsPaddingEl) {
+            goodsPaddingEl.addEventListener('input', function () {
+              personalRecommendConfig.goodsPadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+        }
+
+        // 自定义组件事件绑定
+        if (currentFloor.type === 'custom-component') {
+          if (!currentFloor.customComponentConfig) currentFloor.customComponentConfig = {};
+          var customComponentConfig = currentFloor.customComponentConfig;
+
+          // 组件名称
+          var nameEl = document.getElementById('custom-component-name');
+          if (nameEl) {
+            nameEl.addEventListener('input', function () {
+              customComponentConfig.componentName = this.value.trim();
+              renderCanvas();
+            });
+          }
+
+          // HTML代码
+          var htmlEl = document.getElementById('custom-component-html');
+          if (htmlEl) {
+            htmlEl.addEventListener('input', function () {
+              customComponentConfig.customHtml = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 背景颜色
+          var bgColorEl = document.getElementById('custom-component-bg-color');
+          if (bgColorEl) {
+            bgColorEl.addEventListener('input', function () {
+              customComponentConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 内边距
+          var paddingEl = document.getElementById('custom-component-padding');
+          if (paddingEl) {
+            paddingEl.addEventListener('input', function () {
+              customComponentConfig.padding = Math.max(0, Math.min(50, parseInt(this.value, 10) || 0));
+              renderCanvas();
+            });
+          }
+
+          // 页面边距
+          var pagePaddingEl = document.getElementById('custom-component-page-padding');
+          if (pagePaddingEl) {
+            pagePaddingEl.addEventListener('input', function () {
+              customComponentConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+        }
+
+        // ========== 我的页面组件事件绑定 ==========
+        if (currentFloor.type === 'mine-header') {
+          if (!currentFloor.mineHeaderConfig) currentFloor.mineHeaderConfig = {};
+          var mineHeaderConfig = currentFloor.mineHeaderConfig;
+
+          var nicknameEl = document.getElementById('mine-header-nickname');
+          if (nicknameEl) {
+            nicknameEl.addEventListener('input', function () {
+              mineHeaderConfig.nickname = this.value;
+              renderCanvas();
+            });
+          }
+
+          var levelEl = document.getElementById('mine-header-level');
+          if (levelEl) {
+            levelEl.addEventListener('input', function () {
+              mineHeaderConfig.memberLevel = this.value;
+              renderCanvas();
+            });
+          }
+
+          var showLevelEl = document.getElementById('mine-header-show-level');
+          if (showLevelEl) {
+            showLevelEl.addEventListener('change', function () {
+              mineHeaderConfig.showLevelBadge = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          var showSettingsEl = document.getElementById('mine-header-show-settings');
+          if (showSettingsEl) {
+            showSettingsEl.addEventListener('change', function () {
+              mineHeaderConfig.showSettingsIcon = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          var headerBgColorEl = document.getElementById('mine-header-bg-color');
+          if (headerBgColorEl) {
+            headerBgColorEl.addEventListener('input', function () {
+              mineHeaderConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+        }
+
+        if (currentFloor.type === 'mine-stats-bar') {
+          if (!currentFloor.mineStatsBarConfig) currentFloor.mineStatsBarConfig = {};
+          var mineStatsBarConfig = currentFloor.mineStatsBarConfig;
+          if (!mineStatsBarConfig.statsItems) mineStatsBarConfig.statsItems = [];
+
+          mineStatsBarConfig.statsItems.forEach(function(item, index) {
+            var valueEl = document.getElementById('mine-stats-value-' + index);
+            if (valueEl) {
+              valueEl.addEventListener('input', function () {
+                mineStatsBarConfig.statsItems[index].value = this.value;
+                renderCanvas();
+              });
+            }
+            var labelEl = document.getElementById('mine-stats-label-' + index);
+            if (labelEl) {
+              labelEl.addEventListener('input', function () {
+                mineStatsBarConfig.statsItems[index].label = this.value;
+                renderCanvas();
+              });
+            }
+          });
+
+          var statsAddItemBtn = document.getElementById('mine-stats-add-item');
+          if (statsAddItemBtn) {
+            statsAddItemBtn.addEventListener('click', function () {
+              if (!mineStatsBarConfig.statsItems) mineStatsBarConfig.statsItems = [];
+              mineStatsBarConfig.statsItems.push({ value: '0', label: '新统计项', link: '' });
+              renderConfigPanel();
+              renderCanvas();
+            });
+          }
+
+          var statsBgColorEl = document.getElementById('mine-stats-bg-color');
+          if (statsBgColorEl) {
+            statsBgColorEl.addEventListener('input', function () {
+              mineStatsBarConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+        }
+
+        if (currentFloor.type === 'mine-nav-grid') {
+          if (!currentFloor.mineNavGridConfig) currentFloor.mineNavGridConfig = {};
+          var mineNavGridConfig = currentFloor.mineNavGridConfig;
+          if (!mineNavGridConfig.navItems) mineNavGridConfig.navItems = [];
+
+          var navTitleEl = document.getElementById('mine-nav-title');
+          if (navTitleEl) {
+            navTitleEl.addEventListener('input', function () {
+              mineNavGridConfig.title = this.value;
+              renderCanvas();
+            });
+          }
+
+          var navShowTitleEl = document.getElementById('mine-nav-show-title');
+          if (navShowTitleEl) {
+            navShowTitleEl.addEventListener('change', function () {
+              mineNavGridConfig.showTitle = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          var navColumnsEl = document.getElementById('mine-nav-columns');
+          if (navColumnsEl) {
+            navColumnsEl.addEventListener('change', function () {
+              mineNavGridConfig.columns = parseInt(this.value, 10);
+              renderCanvas();
+            });
+          }
+
+          var navBgColorEl = document.getElementById('mine-nav-bg-color');
+          if (navBgColorEl) {
+            navBgColorEl.addEventListener('input', function () {
+              mineNavGridConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          var navCornerEl = document.getElementById('mine-nav-corner');
+          if (navCornerEl) {
+            navCornerEl.addEventListener('change', function () {
+              mineNavGridConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          var navPaddingEl = document.getElementById('mine-nav-page-padding');
+          if (navPaddingEl) {
+            navPaddingEl.addEventListener('input', function () {
+              mineNavGridConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 导航项配置
+          mineNavGridConfig.navItems.forEach(function(item, index) {
+            var nameEl = document.getElementById('mine-nav-name-' + index);
+            if (nameEl) {
+              nameEl.addEventListener('input', function () {
+                mineNavGridConfig.navItems[index].name = this.value;
+                renderCanvas();
+              });
+            }
+          });
+
+          // 为每个导航项绑定图片选择器事件
+          mineNavGridConfig.navItems.forEach(function(item, index) {
+            bindImageSelectorEvents({
+              fileInputId: 'mine-nav-file-input-' + index,
+              libraryBtnId: 'mine-nav-library-btn-' + index,
+              previewId: 'mine-nav-img-preview-' + index,
+              onImageSelected: function(imageUrl) {
+                mineNavGridConfig.navItems[index].image = imageUrl;
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转类型选择
+          propsComponentPanel.querySelectorAll('.mine-nav-jump-type').forEach(function (selectEl) {
+            selectEl.addEventListener('change', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (mineNavGridConfig.navItems[idx]) {
+                mineNavGridConfig.navItems[idx].jumpType = this.value;
+                mineNavGridConfig.navItems[idx].jumpTarget = '';
+                renderComponentPropsPanel();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转目标输入（普通输入框）
+          propsComponentPanel.querySelectorAll('.mine-nav-jump-target').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (mineNavGridConfig.navItems[idx]) {
+                mineNavGridConfig.navItems[idx].jumpTarget = this.value.trim();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 绑定可搜索下拉框事件（分类、品牌、标签）
+          bindSearchableDropdownEvents(propsComponentPanel, 'mine-nav-jump-target', function(idx, value) {
+            if (mineNavGridConfig.navItems[idx]) {
+              mineNavGridConfig.navItems[idx].jumpTarget = value;
+              renderCanvas();
+            }
+          });
+
+          // 绑定商品选择事件
+          bindProductSelectEvents(propsComponentPanel, 'mine-nav-jump-target', function(idx, value) {
+            if (mineNavGridConfig.navItems[idx]) {
+              mineNavGridConfig.navItems[idx].jumpTarget = value;
+              renderCanvas();
+            }
+          });
+
+          // 添加导航项按钮
+          var addNavItemBtn = document.getElementById('mine-nav-add-item');
+          if (addNavItemBtn) {
+            addNavItemBtn.addEventListener('click', function () {
+              mineNavGridConfig.navItems.push({ icon: '📌', image: '', name: '新导航', jumpType: 'none', jumpTarget: '' });
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          }
+        }
+
+        if (currentFloor.type === 'mine-menu-list') {
+          if (!currentFloor.mineMenuListConfig) currentFloor.mineMenuListConfig = {};
+          var mineMenuListConfig = currentFloor.mineMenuListConfig;
+          if (!mineMenuListConfig.menuItems) mineMenuListConfig.menuItems = [];
+
+          var menuTitleEl = document.getElementById('mine-menu-title');
+          if (menuTitleEl) {
+            menuTitleEl.addEventListener('input', function () {
+              mineMenuListConfig.title = this.value;
+              renderCanvas();
+            });
+          }
+
+          var menuShowTitleEl = document.getElementById('mine-menu-show-title');
+          if (menuShowTitleEl) {
+            menuShowTitleEl.addEventListener('change', function () {
+              mineMenuListConfig.showTitle = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          var menuBgColorEl = document.getElementById('mine-menu-bg-color');
+          if (menuBgColorEl) {
+            menuBgColorEl.addEventListener('input', function () {
+              mineMenuListConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          var menuCornerEl = document.getElementById('mine-menu-corner');
+          if (menuCornerEl) {
+            menuCornerEl.addEventListener('change', function () {
+              mineMenuListConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          var menuPaddingEl = document.getElementById('mine-menu-page-padding');
+          if (menuPaddingEl) {
+            menuPaddingEl.addEventListener('input', function () {
+              mineMenuListConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 菜单项配置
+          mineMenuListConfig.menuItems.forEach(function(item, index) {
+            var nameEl = document.getElementById('mine-menu-name-' + index);
+            if (nameEl) {
+              nameEl.addEventListener('input', function () {
+                mineMenuListConfig.menuItems[index].name = this.value;
+                renderCanvas();
+              });
+            }
+          });
+
+          // 为每个菜单项绑定图片选择器事件
+          mineMenuListConfig.menuItems.forEach(function(item, index) {
+            bindImageSelectorEvents({
+              fileInputId: 'mine-menu-file-input-' + index,
+              libraryBtnId: 'mine-menu-library-btn-' + index,
+              previewId: 'mine-menu-img-preview-' + index,
+              onImageSelected: function(imageUrl) {
+                mineMenuListConfig.menuItems[index].image = imageUrl;
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转类型选择
+          propsComponentPanel.querySelectorAll('.mine-menu-jump-type').forEach(function (selectEl) {
+            selectEl.addEventListener('change', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (mineMenuListConfig.menuItems[idx]) {
+                mineMenuListConfig.menuItems[idx].jumpType = this.value;
+                mineMenuListConfig.menuItems[idx].jumpTarget = '';
+                renderComponentPropsPanel();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转目标输入（普通输入框）
+          propsComponentPanel.querySelectorAll('.mine-menu-jump-target').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              var idx = parseInt(this.dataset.index, 10);
+              if (mineMenuListConfig.menuItems[idx]) {
+                mineMenuListConfig.menuItems[idx].jumpTarget = this.value.trim();
+                renderCanvas();
+              }
+            });
+          });
+
+          // 绑定可搜索下拉框事件（分类、品牌、标签）
+          bindSearchableDropdownEvents(propsComponentPanel, 'mine-menu-jump-target', function(idx, value) {
+            if (mineMenuListConfig.menuItems[idx]) {
+              mineMenuListConfig.menuItems[idx].jumpTarget = value;
+              renderCanvas();
+            }
+          });
+
+          // 绑定商品选择事件
+          bindProductSelectEvents(propsComponentPanel, 'mine-menu-jump-target', function(idx, value) {
+            if (mineMenuListConfig.menuItems[idx]) {
+              mineMenuListConfig.menuItems[idx].jumpTarget = value;
+              renderCanvas();
+            }
+          });
+
+          // 添加菜单项按钮
+          var addMenuItemBtn = document.getElementById('mine-menu-add-item');
+          if (addMenuItemBtn) {
+            addMenuItemBtn.addEventListener('click', function () {
+              mineMenuListConfig.menuItems.push({ icon: '📋', image: '', name: '新菜单', jumpType: 'none', jumpTarget: '' });
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          }
+        }
+
+        if (currentFloor.type === 'points-card') {
+          if (!currentFloor.pointsCardConfig) currentFloor.pointsCardConfig = {};
+          var pointsCardConfig = currentFloor.pointsCardConfig;
+
+          var pointsValueEl = document.getElementById('points-card-value');
+          if (pointsValueEl) {
+            pointsValueEl.addEventListener('input', function () {
+              pointsCardConfig.currentPoints = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          var pointsNameEl = document.getElementById('points-card-name');
+          if (pointsNameEl) {
+            pointsNameEl.addEventListener('input', function () {
+              pointsCardConfig.pointsName = this.value;
+              renderCanvas();
+            });
+          }
+
+          var pointsShowBtnEl = document.getElementById('points-card-show-btn');
+          if (pointsShowBtnEl) {
+            pointsShowBtnEl.addEventListener('change', function () {
+              pointsCardConfig.showExchangeBtn = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          var pointsBgColorEl = document.getElementById('points-card-bg-color');
+          if (pointsBgColorEl) {
+            pointsBgColorEl.addEventListener('input', function () {
+              pointsCardConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+        }
+
+        // 大背景图组件事件绑定
+        if (currentFloor.type === 'big-bg-image') {
+          if (!currentFloor.bigBgImageConfig) currentFloor.bigBgImageConfig = {};
+          var bgImgConfig = currentFloor.bigBgImageConfig;
+
+          // 图片选择器事件绑定
+          bindImageSelectorEvents({
+            fileInputId: 'bg-img-file-input',
+            libraryBtnId: 'bg-img-library-btn',
+            previewId: 'bg-img-preview',
+            onImageSelected: function(imageUrl) {
+              bgImgConfig.backgroundImage = imageUrl;
+              renderCanvas();
+            }
+          });
+
+          // 背景颜色
+          var bgImgColorEl = document.getElementById('bg-img-color');
+          if (bgImgColorEl) {
+            bgImgColorEl.addEventListener('input', function () {
+              bgImgConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 高度
+          var bgImgHeightEl = document.getElementById('bg-img-height');
+          if (bgImgHeightEl) {
+            bgImgHeightEl.addEventListener('input', function () {
+              bgImgConfig.height = parseInt(this.value, 10) || 200;
+              renderCanvas();
+            });
+          }
+
+          // 图片填充方式
+          var bgImgSizeEl = document.getElementById('bg-img-size');
+          if (bgImgSizeEl) {
+            bgImgSizeEl.addEventListener('change', function () {
+              bgImgConfig.backgroundSize = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 图片位置
+          var bgImgPositionEl = document.getElementById('bg-img-position');
+          if (bgImgPositionEl) {
+            bgImgPositionEl.addEventListener('change', function () {
+              bgImgConfig.backgroundPosition = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 图片重复
+          var bgImgRepeatEl = document.getElementById('bg-img-repeat');
+          if (bgImgRepeatEl) {
+            bgImgRepeatEl.addEventListener('change', function () {
+              bgImgConfig.backgroundRepeat = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 叠加内容
+          var bgImgContentEl = document.getElementById('bg-img-content');
+          if (bgImgContentEl) {
+            bgImgContentEl.addEventListener('input', function () {
+              bgImgConfig.content = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 内容颜色
+          var bgImgContentColorEl = document.getElementById('bg-img-content-color');
+          if (bgImgContentColorEl) {
+            bgImgContentColorEl.addEventListener('input', function () {
+              bgImgConfig.contentColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 跳转类型选择
+          var bgImgJumpTypeEl = propsComponentPanel.querySelector('.bg-img-jump-type');
+          if (bgImgJumpTypeEl) {
+            bgImgJumpTypeEl.addEventListener('change', function () {
+              bgImgConfig.jumpType = this.value;
+              bgImgConfig.jumpTarget = '';
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          }
+
+          // 跳转目标输入（普通输入框）
+          var bgImgJumpTargetEl = propsComponentPanel.querySelector('.bg-img-jump-target');
+          if (bgImgJumpTargetEl) {
+            bgImgJumpTargetEl.addEventListener('input', function () {
+              bgImgConfig.jumpTarget = this.value.trim();
+              renderCanvas();
+            });
+          }
+
+          // 绑定可搜索下拉框事件（分类、品牌、标签）
+          bindSearchableDropdownEvents(propsComponentPanel, 'bg-img-jump-target', function(idx, value) {
+            bgImgConfig.jumpTarget = value;
+            renderCanvas();
+          });
+
+          // 绑定商品选择事件
+          bindProductSelectEvents(propsComponentPanel, 'bg-img-jump-target', function(idx, value) {
+            bgImgConfig.jumpTarget = value;
+            renderCanvas();
+          });
+
+          // 页面边距
+          var bgImgPagePaddingEl = document.getElementById('bg-img-page-padding');
+          if (bgImgPagePaddingEl) {
+            bgImgPagePaddingEl.addEventListener('input', function () {
+              bgImgConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+        }
+
+        // 富文本域组件事件绑定
+        if (currentFloor.type === 'rich-text') {
+          if (!currentFloor.richTextConfig) currentFloor.richTextConfig = {};
+          var rtConfig = currentFloor.richTextConfig;
+
+          // 默认内容
+          var defaultRichTextContent = '<p style="color:#1677ff;font-size:15px;">点此编辑『富文本』内容 ----></p>\n<p>你可以对文字进行<strong>加粗</strong>、<em>斜体</em>、<u>下划线</u>、<s>删除线</s>、<span style="color: red;">文字颜色</span>、<span style="background-color: yellow;">背景色</span>、以及字号大小等简单排版操作。</p>\n<p>还可以在这里加入表格了</p>\n<table style="width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px;">\n<thead>\n<tr style="background: #f5f5f5;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">中奖客户</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">发放奖品</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">备注</th></tr>\n</thead>\n<tbody>\n<tr><td style="border: 1px solid #ddd; padding: 8px;">猪猪</td><td style="border: 1px solid #ddd; padding: 8px;">内测码</td><td style="border: 1px solid #ddd; padding: 8px;"><em>已经发放</em></td></tr>\n<tr><td style="border: 1px solid #ddd; padding: 8px;">大麦</td><td style="border: 1px solid #ddd; padding: 8px;">积分</td><td style="border: 1px solid #ddd; padding: 8px;"><a href="#">领取地址</a></td></tr>\n</tbody>\n</table>\n<p>也可在这里插入图片、并对图片加上超级链接，方便用户点击。</p>';
+
+          // 打开编辑器弹窗
+          var rtOpenEditorBtn = document.getElementById('rt-open-editor');
+          if (rtOpenEditorBtn) {
+            rtOpenEditorBtn.addEventListener('click', function () {
+              openRichTextEditorModal(rtConfig, defaultRichTextContent, renderCanvas);
+            });
+          }
+
+          // 背景颜色
+          var rtBgColorEl = document.getElementById('rt-bg-color');
+          if (rtBgColorEl) {
+            rtBgColorEl.addEventListener('input', function () {
+              rtConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 图片选择器事件绑定
+          bindImageSelectorEvents({
+            fileInputId: 'rt-file-input',
+            libraryBtnId: 'rt-library-btn',
+            previewId: 'rt-bg-img-preview',
+            onImageSelected: function(imageUrl) {
+              rtConfig.backgroundImage = imageUrl;
+              renderCanvas();
+            }
+          });
+
+          // 图片填充方式
+          var rtBgSizeEl = document.getElementById('rt-bg-size');
+          if (rtBgSizeEl) {
+            rtBgSizeEl.addEventListener('change', function () {
+              rtConfig.backgroundSize = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 图片重复
+          var rtBgRepeatEl = document.getElementById('rt-bg-repeat');
+          if (rtBgRepeatEl) {
+            rtBgRepeatEl.addEventListener('change', function () {
+              rtConfig.backgroundRepeat = this.value;
+              renderCanvas();
+            });
+          }
+
+          // 上边距
+          var rtPaddingTopEl = document.getElementById('rt-padding-top');
+          if (rtPaddingTopEl) {
+            rtPaddingTopEl.addEventListener('input', function () {
+              rtConfig.paddingTop = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 下边距
+          var rtPaddingBottomEl = document.getElementById('rt-padding-bottom');
+          if (rtPaddingBottomEl) {
+            rtPaddingBottomEl.addEventListener('input', function () {
+              rtConfig.paddingBottom = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 左边距
+          var rtPaddingLeftEl = document.getElementById('rt-padding-left');
+          if (rtPaddingLeftEl) {
+            rtPaddingLeftEl.addEventListener('input', function () {
+              rtConfig.paddingLeft = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 右边距
+          var rtPaddingRightEl = document.getElementById('rt-padding-right');
+          if (rtPaddingRightEl) {
+            rtPaddingRightEl.addEventListener('input', function () {
+              rtConfig.paddingRight = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 最大宽度
+          var rtMaxWidthEl = document.getElementById('rt-max-width');
+          if (rtMaxWidthEl) {
+            rtMaxWidthEl.addEventListener('input', function () {
+              rtConfig.maxWidth = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+
+          // 边角样式
+          var rtCornerStyleEl = document.getElementById('rt-corner-style');
+          if (rtCornerStyleEl) {
+            rtCornerStyleEl.addEventListener('change', function () {
+              rtConfig.cornerStyle = this.value;
+              renderCanvas();
+            });
+          }
+        }
+
+        // 商品分组组件事件绑定
+        if (currentFloor.type === 'goods-group') {
+          if (!currentFloor.goodsGroupConfig) currentFloor.goodsGroupConfig = {};
+          var ggConfig = currentFloor.goodsGroupConfig;
+          if (!ggConfig.groups) {
+            ggConfig.groups = [
+              { id: 'group-1', name: '推荐', dataSource: 'brand', sortType: 'comprehensive', goodsCount: 20 },
+              { id: 'group-2', name: '新品', dataSource: 'brand', sortType: 'newest', goodsCount: 20 },
+              { id: 'group-3', name: '热销', dataSource: 'brand', sortType: 'sales', goodsCount: 20 },
+            ];
+          }
+
+          // 分组配置事件
+          var ggAddGroupBtn = document.getElementById('gg-add-group-btn');
+          if (ggAddGroupBtn) {
+            ggAddGroupBtn.addEventListener('click', function () {
+              if (ggConfig.groups.length >= 10) return;
+              var newIndex = ggConfig.groups.length + 1;
+              ggConfig.groups.push({
+                id: 'group-' + Date.now(),
+                name: '分组' + newIndex,
+                dataSource: 'brand',
+                sortType: 'comprehensive',
+                goodsCount: 20
+              });
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          }
+
+          // 删除分组
+          document.querySelectorAll('.gg-delete-group-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var groupId = this.dataset.groupId;
+              ggConfig.groups = ggConfig.groups.filter(function (g) { return g.id !== groupId; });
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          });
+
+          // 分组名称修改
+          document.querySelectorAll('.gg-group-name-input').forEach(function (input) {
+            input.addEventListener('input', function () {
+              var groupId = this.dataset.groupId;
+              ggConfig.groups.forEach(function (g) {
+                if (g.id === groupId) {
+                  g.name = this.value;
+                }
+              }.bind(this));
+              renderCanvas();
+            });
+          });
+
+          // 商品显示个数修改
+          document.querySelectorAll('.gg-group-goods-count').forEach(function (select) {
+            select.addEventListener('change', function () {
+              var groupId = this.dataset.groupId;
+              ggConfig.groups.forEach(function (g) {
+                if (g.id === groupId) {
+                  g.goodsCount = parseInt(this.value, 10);
+                }
+              }.bind(this));
+              renderCanvas();
+            });
+          });
+
+          // 配置商品数据来源按钮
+          document.querySelectorAll('.gg-config-source-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var floorId = this.dataset.floorId;
+              var groupId = this.dataset.groupId;
+              openGoodsSourceModal(floorId, groupId);
+            });
+          });
+
+          var ggMenuBgColorEl = document.getElementById('gg-menu-bg-color');
+          if (ggMenuBgColorEl) {
+            ggMenuBgColorEl.addEventListener('input', function () {
+              ggConfig.menuBgColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          var ggMenuStyleEl = document.getElementById('gg-menu-style');
+          if (ggMenuStyleEl) {
+            ggMenuStyleEl.addEventListener('change', function () {
+              ggConfig.menuStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          var ggShowGroupNameEl = document.getElementById('gg-show-group-name');
+          if (ggShowGroupNameEl) {
+            ggShowGroupNameEl.addEventListener('change', function () {
+              ggConfig.showGroupName = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          var ggListStyleEl = document.getElementById('gg-list-style');
+          if (ggListStyleEl) {
+            ggListStyleEl.addEventListener('change', function () {
+              ggConfig.listStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          var ggGoodsStyleEl = document.getElementById('gg-goods-style');
+          if (ggGoodsStyleEl) {
+            ggGoodsStyleEl.addEventListener('change', function () {
+              ggConfig.goodsStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          var ggCartStyleEl = document.getElementById('gg-cart-style');
+          if (ggCartStyleEl) {
+            ggCartStyleEl.addEventListener('change', function () {
+              ggConfig.cartStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          var ggShowDescEl = document.getElementById('gg-show-desc');
+          if (ggShowDescEl) {
+            ggShowDescEl.addEventListener('change', function () {
+              ggConfig.showDesc = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          var ggShowOriginalEl = document.getElementById('gg-show-original');
+          if (ggShowOriginalEl) {
+            ggShowOriginalEl.addEventListener('change', function () {
+              ggConfig.showOriginalPrice = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          var ggShowPriceEl = document.getElementById('gg-show-price');
+          if (ggShowPriceEl) {
+            ggShowPriceEl.addEventListener('change', function () {
+              ggConfig.showPrice = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          var ggShowSalesEl = document.getElementById('gg-show-sales');
+          if (ggShowSalesEl) {
+            ggShowSalesEl.addEventListener('change', function () {
+              ggConfig.showSales = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          var ggTextStyleEl = document.getElementById('gg-text-style');
+          if (ggTextStyleEl) {
+            ggTextStyleEl.addEventListener('change', function () {
+              ggConfig.textStyle = this.value;
+              renderCanvas();
+            });
+          }
+
+          var ggGoodsCornerEl = document.getElementById('gg-goods-corner');
+          if (ggGoodsCornerEl) {
+            ggGoodsCornerEl.addEventListener('change', function () {
+              ggConfig.goodsCorner = this.value;
+              renderCanvas();
+            });
+          }
+
+          var ggPagePaddingEl = document.getElementById('gg-page-padding');
+          if (ggPagePaddingEl) {
+            ggPagePaddingEl.addEventListener('input', function () {
+              ggConfig.pagePadding = parseInt(this.value, 10) || 12;
+              renderCanvas();
+            });
+          }
+
+          var ggGoodsPaddingEl = document.getElementById('gg-goods-padding');
+          if (ggGoodsPaddingEl) {
+            ggGoodsPaddingEl.addEventListener('input', function () {
+              ggConfig.goodsPadding = parseInt(this.value, 10) || 8;
+              renderCanvas();
+            });
+          }
+
+          var ggEnableRefreshEl = document.getElementById('gg-enable-refresh');
+          if (ggEnableRefreshEl) {
+            ggEnableRefreshEl.addEventListener('change', function () {
+              ggConfig.enableRefresh = this.value === 'true';
+              renderCanvas();
+            });
+          }
+
+          // 加载全部按钮点击事件
+          document.querySelectorAll('.gg-load-all-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              // 模拟加载更多商品的操作
+              alert('加载更多商品功能，将在实际应用中滚动分页加载');
+            });
+          });
+        }
+
+        // 搜索框组件事件绑定
+        if (currentFloor.type === 'search-bar') {
+          if (!currentFloor.searchBarConfig) currentFloor.searchBarConfig = {};
+          var searchConfig = currentFloor.searchBarConfig;
+
+          var searchPlaceholderEl = document.getElementById('search-placeholder');
+          if (searchPlaceholderEl) {
+            searchPlaceholderEl.addEventListener('input', function () {
+              searchConfig.placeholder = this.value;
+              renderCanvas();
+            });
+          }
+
+          var searchBgColorEl = document.getElementById('search-bg-color');
+          if (searchBgColorEl) {
+            searchBgColorEl.addEventListener('input', function () {
+              searchConfig.backgroundColor = this.value;
+              renderCanvas();
+            });
+          }
+
+          var searchRadiusEl = document.getElementById('search-border-radius');
+          if (searchRadiusEl) {
+            searchRadiusEl.addEventListener('input', function () {
+              searchConfig.borderRadius = parseInt(this.value, 10) || 17;
+              renderCanvas();
+            });
+          }
+
+          var searchHeightEl = document.getElementById('search-height');
+          if (searchHeightEl) {
+            searchHeightEl.addEventListener('input', function () {
+              searchConfig.height = parseInt(this.value, 10) || 34;
+              renderCanvas();
+            });
+          }
+
+          var searchPagePaddingEl = document.getElementById('search-page-padding');
+          if (searchPagePaddingEl) {
+            searchPagePaddingEl.addEventListener('input', function () {
+              searchConfig.pagePadding = parseInt(this.value, 10) || 0;
+              renderCanvas();
+            });
+          }
+        }
+
+        if (
+          currentFloor.type === 'category-showcase' &&
+          currentFloor.categoryPreset !== 'page3' &&
+          currentFloor.categoryPreset !== 'page4' &&
+          currentFloor.categoryPreset !== 'page5'
+        ) {
+          const bannerConfig = ensureCategoryBannerConfig(currentFloor);
+          const intervalInput = document.getElementById('category-banner-interval');
+          const radiusInput = document.getElementById('category-banner-radius');
+          const addBtn = document.getElementById('category-banner-add');
+
+          if (addBtn) {
+            addBtn.addEventListener('click', function () {
+              bannerConfig.slides.push({ image: '', jumpType: 'none', jumpTarget: '' });
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          }
+
+          // 为每个图片项绑定图片选择器事件
+          bannerConfig.slides.forEach(function(slide, index) {
+            bindImageSelectorEvents({
+              fileInputId: 'banner-file-input-' + index,
+              libraryBtnId: 'banner-library-btn-' + index,
+              previewId: 'banner-img-preview-' + index,
+              onImageSelected: function(imageUrl) {
+                bannerConfig.slides[index].image = imageUrl;
+                renderCanvas();
+              }
+            });
+          });
+
+          // 跳转类型选择
+          propsComponentPanel.querySelectorAll('.banner-jump-type').forEach(function (selectEl) {
+            selectEl.addEventListener('change', function () {
+              const idx = Number(this.dataset.index);
+              if (!bannerConfig.slides[idx]) return;
+              bannerConfig.slides[idx].jumpType = this.value;
+              bannerConfig.slides[idx].jumpTarget = '';
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          });
+
+          // 跳转目标输入（普通输入框）
+          propsComponentPanel.querySelectorAll('.banner-jump-target').forEach(function (inputEl) {
+            inputEl.addEventListener('input', function () {
+              const idx = Number(this.dataset.index);
+              if (!bannerConfig.slides[idx]) return;
+              bannerConfig.slides[idx].jumpTarget = this.value.trim();
+              renderCanvas();
+            });
+          });
+
+          // 绑定可搜索下拉框事件（分类、品牌、标签）
+          bindSearchableDropdownEvents(propsComponentPanel, 'banner-jump-target', function(idx, value) {
+            if (bannerConfig.slides[idx]) {
+              bannerConfig.slides[idx].jumpTarget = value;
+              renderCanvas();
+            }
+          });
+
+          // 绑定商品选择事件
+          bindProductSelectEvents(propsComponentPanel, 'banner-jump-target', function(idx, value) {
+            if (bannerConfig.slides[idx]) {
+              bannerConfig.slides[idx].jumpTarget = value;
+              renderCanvas();
+            }
+          });
+
+          propsComponentPanel.querySelectorAll('.banner-row-remove').forEach(function (btnEl) {
+            btnEl.addEventListener('click', function () {
+              const idx = Number(this.dataset.index);
+              bannerConfig.slides.splice(idx, 1);
+              if (!bannerConfig.slides.length) {
+                bannerConfig.slides.push({
+                  image: '',
+                  jumpType: 'none',
+                  jumpTarget: '',
+                  title: '12·12 年终大促\n数码好物低至 5 折',
+                  cta: '立即抢购',
+                  emoji: '🎮',
+                  bg: 'linear-gradient(135deg, #ff8a80 0%, #ff6a5a 45%, #ff4e3f 100%)',
+                });
+              }
+              renderComponentPropsPanel();
+              renderCanvas();
+            });
+          });
+
+          if (intervalInput) {
+            intervalInput.addEventListener('input', function () {
+              const next = Math.max(1000, Number(this.value) || 5000);
+              bannerConfig.intervalMs = next;
+              renderCanvas();
+            });
+          }
+          if (radiusInput) {
+            radiusInput.addEventListener('input', function () {
+              const next = Math.max(0, Math.min(24, Number(this.value) || 0));
+              bannerConfig.radius = next;
+              renderCanvas();
+            });
+          }
+        }
+      }
+
+      function renderCanvasSideActions() {
+        if (!canvasSideActions) return;
+        const currentFloor = getCurrentFloor();
+        if (!currentFloor) {
+          canvasSideActions.style.display = 'none';
+          return;
+        }
+        const currentCard = floorListEl.querySelector('[data-floor-id="' + currentFloor.id + '"]');
+        const stage = phoneShell.parentElement;
+        if (!currentCard || !stage) {
+          canvasSideActions.style.display = 'none';
+          return;
+        }
+        const cardRect = currentCard.getBoundingClientRect();
+        const stageRect = stage.getBoundingClientRect();
+        const shellRect = phoneShell.getBoundingClientRect();
+        const top = cardRect.top - stageRect.top + cardRect.height / 2;
+        const left = shellRect.right - stageRect.left + 12;
+        canvasSideActions.style.top = top + 'px';
+        canvasSideActions.style.left = left + 'px';
+        canvasSideActions.style.display = 'flex';
+
+        const currentPage = getCurrentPage();
+        const index = currentPage.floors.findIndex(function (floor) { return floor.id === currentFloor.id; });
+        const isFixed = !!currentFloor.fixed;
+        if (btnCanvasUp) btnCanvasUp.disabled = isFixed || index <= 0;
+        if (btnCanvasDown) btnCanvasDown.disabled = isFixed || index === -1 || index >= currentPage.floors.length - 1;
+        if (btnCanvasCopy) btnCanvasCopy.disabled = isFixed;
+        if (btnCanvasDelete) btnCanvasDelete.disabled = isFixed;
+      }
+
+      function renderTabbar() {
+        if (!canvasTabbar) return;
+
+        // 检查当前页面是否需要隐藏底部导航栏（主页面和子页面都可用）
+        var currentPage = getCurrentPage();
+        if (currentPage && currentPage.showTabbar === false) {
+          canvasTabbar.style.display = 'none';
+          return;
+        }
+        canvasTabbar.style.display = 'flex';
+
+        canvasTabbar.style.height = tabbarConfig.height + 'px';
+        canvasTabbar.style.background = tabbarConfig.backgroundColor;
+        canvasTabbar.style.borderTopColor = tabbarConfig.borderColor;
+        canvasTabbar.innerHTML = tabItems.map(function (tab) {
+          const textStyle = [
+            'font-size:' + tabbarConfig.fontSize + 'px',
+            'color:' + (tab.active ? tabbarConfig.activeColor : tabbarConfig.defaultColor),
+            'display:' + (tabbarConfig.showText ? 'inline' : 'none'),
+          ].join(';');
+          return `
+            <div class="canvas-tabbar-item ${tab.active ? 'active' : ''}" data-tab-id="${tab.id}" style="gap:${tabbarConfig.iconGap}px;">
+              <img class="canvas-tabbar-icon" src="${getTabIconSrc(tab, tab.active)}" alt="${tab.name}" style="width:22px;height:22px;border-radius:8px;object-fit:cover;background:transparent;" />
+              <span style="${textStyle}">${tab.name}</span>
+            </div>
+          `;
+        }).join('');
+
+        if (tabbarCount) tabbarCount.textContent = tabItems.length + ' / 5';
+        if (btnRemoveTab) btnRemoveTab.disabled = tabItems.length <= 1;
+        if (btnAddTab) btnAddTab.disabled = tabItems.length >= 5;
+
+        canvasTabbar.querySelectorAll('.canvas-tabbar-item').forEach(function (item) {
+          item.addEventListener('click', function () {
+            const targetId = this.dataset.tabId || '';
+            tabItems = tabItems.map(function (tab) {
+              return {
+                id: tab.id,
+                name: tab.name,
+                active: tab.id === targetId,
+                targetPageId: tab.targetPageId,
+                defaultIconUrl: tab.defaultIconUrl,
+                activeIconUrl: tab.activeIconUrl,
+              };
+            });
+            const currentTab = tabItems.find(function (tab) { return tab.id === targetId; });
+            if (currentTab && currentTab.targetPageId) {
+              currentPageId = currentTab.targetPageId;
+              selectedFloorId = '';
+              renderCanvas();
+              renderComponentPropsPanel();
+              renderSidePanel();
+            }
+            renderTabbar();
+            renderTabConfigPanel();
+          });
+        });
+      }
+
+      function renderTabConfigPanel() {
+        var tabConfigListEl = document.getElementById('tab-config-list');
+        if (!tabConfigListEl) return;
+        tabConfigListEl.innerHTML = tabItems.map(function (tab, index) {
+          var defaultIconHtml = tab.defaultIconUrl
+            ? '<img src="' + tab.defaultIconUrl + '" alt="默认图标" />'
+            : '<div class="tab-icon-empty"><span>默认</span></div>';
+          var activeIconHtml = tab.activeIconUrl
+            ? '<img src="' + tab.activeIconUrl + '" alt="选中图标" />'
+            : '<div class="tab-icon-empty"><span>选中</span></div>';
+
+          return '' +
+            '<div class="tab-config-item" data-tab-config-id="' + tab.id + '">' +
+              '<h5>Tab ' + (index + 1) + ' 配置</h5>' +
+              '<div class="config-grid">' +
+                '<div class="config-item">' +
+                  '<label>名称</label>' +
+                  '<input type="text" data-field="name" value="' + tab.name + '" />' +
+                '</div>' +
+                '<div class="config-item">' +
+                  '<label>选中跳转页面</label>' +
+                  '<select data-field="targetPageId">' +
+                    getPageOptionsMarkup(tab.targetPageId) +
+                  '</select>' +
+                '</div>' +
+              '</div>' +
+              '<div class="tab-icon-config">' +
+                '<div class="tab-icon-config-label">图标配置</div>' +
+                '<div class="tab-icon-config-row">' +
+                  '<div class="tab-icon-item">' +
+                    '<div class="tab-icon-preview" id="tab-default-icon-preview-' + index + '">' +
+                      defaultIconHtml +
+                    '</div>' +
+                    '<div class="tab-icon-btns">' +
+                      '<label class="tab-icon-btn" for="tab-default-icon-file-' + index + '">本地上传</label>' +
+                      '<input type="file" id="tab-default-icon-file-' + index + '" accept="image/*" style="display:none;" />' +
+                      '<button type="button" class="tab-icon-btn" id="tab-default-icon-library-' + index + '">素材库</button>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="tab-icon-item">' +
+                    '<div class="tab-icon-preview" id="tab-active-icon-preview-' + index + '">' +
+                      activeIconHtml +
+                    '</div>' +
+                    '<div class="tab-icon-btns">' +
+                      '<label class="tab-icon-btn" for="tab-active-icon-file-' + index + '">本地上传</label>' +
+                      '<input type="file" id="tab-active-icon-file-' + index + '" accept="image/*" style="display:none;" />' +
+                      '<button type="button" class="tab-icon-btn" id="tab-active-icon-library-' + index + '">素材库</button>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="tab-config-note">交互行为：点击当前 Tab 时，切换到"选中跳转页面"对应的页面。</div>' +
+            '</div>';
+        }).join('');
+
+        // 绑定名称和页面选择事件
+        tabConfigListEl.querySelectorAll('[data-tab-config-id]').forEach(function (card) {
+          const tabId = card.dataset.tabConfigId || '';
+          card.querySelectorAll('[data-field]').forEach(function (fieldEl) {
+            fieldEl.addEventListener('input', function () {
+              const field = this.dataset.field || '';
+              tabItems = tabItems.map(function (tab) {
+                if (tab.id !== tabId) return tab;
+                const nextValue = field === 'targetPageId' ? this.value : this.value.trim();
+                return {
+                  id: tab.id,
+                  name: field === 'name' ? (nextValue || '未命名') : tab.name,
+                  active: tab.active,
+                  targetPageId: field === 'targetPageId' ? nextValue : tab.targetPageId,
+                  defaultIconUrl: tab.defaultIconUrl,
+                  activeIconUrl: tab.activeIconUrl,
+                };
+              }, this);
+              renderTabbar();
+            });
+            fieldEl.addEventListener('change', function () {
+              this.dispatchEvent(new Event('input'));
+            });
+          });
+        });
+
+        // 绑定图片选择器事件
+        tabItems.forEach(function (tab, index) {
+          // 默认图标选择器
+          (function(idx) {
+            var fileInput = document.getElementById('tab-default-icon-file-' + idx);
+            var libraryBtn = document.getElementById('tab-default-icon-library-' + idx);
+            var previewEl = document.getElementById('tab-default-icon-preview-' + idx);
+
+            if (fileInput) {
+              fileInput.addEventListener('change', function() {
+                var file = this.files && this.files[0];
+                if (!file) return;
+                uploadLocalImage(file, function(newImage) {
+                  tabItems = tabItems.map(function(t) {
+                    if (t.id !== tabItems[idx].id) return t;
+                    return { id: t.id, name: t.name, active: t.active, targetPageId: t.targetPageId, defaultIconUrl: newImage.url, activeIconUrl: t.activeIconUrl };
+                  });
+                  if (previewEl) previewEl.innerHTML = '<img src="' + newImage.url + '" alt="默认图标" />';
+                  renderTabbar();
+                });
+                this.value = '';
+              });
+            }
+
+            if (libraryBtn) {
+              libraryBtn.addEventListener('click', function() {
+                openImagePickerModal(function(selectedImage) {
+                  if (!selectedImage) return;
+                  var imageUrl = selectedImage.url;
+                  tabItems = tabItems.map(function(t) {
+                    if (t.id !== tabItems[idx].id) return t;
+                    return { id: t.id, name: t.name, active: t.active, targetPageId: t.targetPageId, defaultIconUrl: imageUrl, activeIconUrl: t.activeIconUrl };
+                  });
+                  if (previewEl) previewEl.innerHTML = '<img src="' + imageUrl + '" alt="默认图标" />';
+                  renderTabbar();
+                }, false);
+              });
+            }
+          })(index);
+
+          // 选中图标选择器
+          (function(idx) {
+            var fileInput = document.getElementById('tab-active-icon-file-' + idx);
+            var libraryBtn = document.getElementById('tab-active-icon-library-' + idx);
+            var previewEl = document.getElementById('tab-active-icon-preview-' + idx);
+
+            if (fileInput) {
+              fileInput.addEventListener('change', function() {
+                var file = this.files && this.files[0];
+                if (!file) return;
+                uploadLocalImage(file, function(newImage) {
+                  tabItems = tabItems.map(function(t) {
+                    if (t.id !== tabItems[idx].id) return t;
+                    return { id: t.id, name: t.name, active: t.active, targetPageId: t.targetPageId, defaultIconUrl: t.defaultIconUrl, activeIconUrl: newImage.url };
+                  });
+                  if (previewEl) previewEl.innerHTML = '<img src="' + newImage.url + '" alt="选中图标" />';
+                  renderTabbar();
+                });
+                this.value = '';
+              });
+            }
+
+            if (libraryBtn) {
+              libraryBtn.addEventListener('click', function() {
+                openImagePickerModal(function(selectedImage) {
+                  if (!selectedImage) return;
+                  var imageUrl = selectedImage.url;
+                  tabItems = tabItems.map(function(t) {
+                    if (t.id !== tabItems[idx].id) return t;
+                    return { id: t.id, name: t.name, active: t.active, targetPageId: t.targetPageId, defaultIconUrl: t.defaultIconUrl, activeIconUrl: imageUrl };
+                  });
+                  if (previewEl) previewEl.innerHTML = '<img src="' + imageUrl + '" alt="选中图标" />';
+                  renderTabbar();
+                }, false);
+              });
+            }
+          })(index);
+        });
+      }
+
+      function clearFloorDropStates() {
+        sideList.querySelectorAll('[data-floor-id]').forEach(function (item) {
+          item.classList.remove('dragging', 'drop-target');
+        });
+        floorListEl.querySelectorAll('[data-floor-id]').forEach(function (item) {
+          item.classList.remove('dragging', 'drop-target');
+        });
+      }
+
+      function moveFloorBefore(targetFloorId) {
+        const currentPage = getCurrentPage();
+        const fromIndex = currentPage.floors.findIndex(function (floor) { return floor.id === draggingFloorId; });
+        const toIndex = currentPage.floors.findIndex(function (floor) { return floor.id === targetFloorId; });
+        if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return;
+        if (currentPage.floors[fromIndex].fixed || currentPage.floors[toIndex].fixed) return;
+        const movedFloor = currentPage.floors.splice(fromIndex, 1)[0];
+        const insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+        currentPage.floors.splice(insertIndex, 0, movedFloor);
+      }
+
+      function moveFloorToEnd() {
+        const currentPage = getCurrentPage();
+        const fromIndex = currentPage.floors.findIndex(function (floor) { return floor.id === draggingFloorId; });
+        if (fromIndex === -1 || fromIndex === currentPage.floors.length - 1) return;
+        if (currentPage.floors[fromIndex].fixed) return;
+        const movedFloor = currentPage.floors.splice(fromIndex, 1)[0];
+        currentPage.floors.push(movedFloor);
+      }
+
+      function syncFloorViews() {
+        renderCanvas();
+        renderComponentPropsPanel();
+        renderCanvasSideActions();
+        renderPageLayoutSideActions();
+      }
+
+      function moveFloorUp(floorId) {
+        const currentPage = getCurrentPage();
+        const index = currentPage.floors.findIndex(function (floor) { return floor.id === floorId; });
+        if (index <= 0) return;
+        if (currentPage.floors[index].fixed || currentPage.floors[index - 1].fixed) return;
+        const temp = currentPage.floors[index - 1];
+        currentPage.floors[index - 1] = currentPage.floors[index];
+        currentPage.floors[index] = temp;
+      }
+
+      function moveFloorDown(floorId) {
+        const currentPage = getCurrentPage();
+        const index = currentPage.floors.findIndex(function (floor) { return floor.id === floorId; });
+        if (index === -1 || index >= currentPage.floors.length - 1) return;
+        if (currentPage.floors[index].fixed || currentPage.floors[index + 1].fixed) return;
+        const temp = currentPage.floors[index + 1];
+        currentPage.floors[index + 1] = currentPage.floors[index];
+        currentPage.floors[index] = temp;
+      }
+
+      function deleteFloor(floorId) {
+        const currentPage = getCurrentPage();
+        const target = currentPage.floors.find(function (floor) { return floor.id === floorId; });
+        if (target && target.fixed) return;
+        const nextFloors = currentPage.floors.filter(function (floor) { return floor.id !== floorId; });
+        currentPage.floors = nextFloors;
+        if (selectedFloorId === floorId) {
+          selectedFloorId = '';
+          propsCurrentFloor.textContent = '未选中组件，点击中间画布中的组件后可查看。';
+        }
+      }
+
+      function duplicateFloor(floorId) {
+        const currentPage = getCurrentPage();
+        const index = currentPage.floors.findIndex(function (floor) { return floor.id === floorId; });
+        if (index === -1) return;
+        const source = currentPage.floors[index];
+        const cloned = {
+          id: 'floor-' + Date.now(),
+          type: source.type,
+          name: source.name + ' 副本',
+          desc: source.desc,
+        };
+        if (source.categoryPreset) {
+          cloned.categoryPreset = source.categoryPreset;
+        }
+        if (source.bannerConfig) {
+          try {
+            cloned.bannerConfig = JSON.parse(JSON.stringify(source.bannerConfig));
+          } catch (e) {
+            cloned.bannerConfig = source.bannerConfig;
+          }
+        }
+        currentPage.floors.splice(index + 1, 0, cloned);
+        selectedFloorId = cloned.id;
+      }
+
+      function bindFloorSortEvents(container, selector) {
+        container.querySelectorAll(selector).forEach(function (item) {
+          item.setAttribute('draggable', 'true');
+          item.classList.add('draggable');
+          item.addEventListener('dragstart', function (event) {
+            draggingFloorId = this.dataset.floorId || '';
+            this.classList.add('dragging');
+            if (event.dataTransfer) {
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', draggingFloorId);
+              event.dataTransfer.setData('application/x-editor-drag-kind', 'floor');
+            }
+          });
+          item.addEventListener('dragend', function () {
+            clearFloorDropStates();
+            draggingFloorId = '';
+          });
+          item.addEventListener('dragover', function (event) {
+            if (!draggingFloorId || draggingFloorId === this.dataset.floorId) return;
+            event.preventDefault();
+            clearFloorDropStates();
+            this.classList.add('drop-target');
+          });
+          item.addEventListener('drop', function (event) {
+            event.preventDefault();
+            if (!draggingFloorId || draggingFloorId === this.dataset.floorId) return;
+            moveFloorBefore(this.dataset.floorId || '');
+            clearFloorDropStates();
+            syncFloorViews();
+          });
+        });
+      }
+
+      /**
+       * 生成分类页 Banner 单张滑块 HTML（含图片/渐变占位等）。
+       * @param {object} slide 单条配置
+       * @param {number} index 索引（用于 data-slide-index）
+       * @param {string} [extraClass] 附加 class，如无缝循环克隆层
+       * @returns {string}
+       */
+      function buildCategoryShowcaseSlideHtml(slide, index, extraClass) {
+        const extra = extraClass ? ' ' + extraClass : '';
+        const imgUrl = slide.image && String(slide.image).trim();
+        const linkUrl = slide.link && String(slide.link).trim();
+        const linkHtml = linkUrl
+          ? '<a class="cat-banner-slide-link" href="' + escapeHtmlAttr(linkUrl) + '" target="_blank" rel="noopener noreferrer" title="跳转链接"></a>'
+          : '';
+        if (imgUrl) {
+          return (
+            '<div class="cat-banner-slide cat-banner-slide--image' +
+            extra +
+            '" data-slide-index="' +
+            index +
+            '">' +
+            '<img class="cat-banner-slide-img" src="' +
+            escapeHtmlAttr(imgUrl) +
+            '" alt="" />' +
+            linkHtml +
+            '</div>'
+          );
+        }
+        const title = (slide.title || '').replace(/\n/g, '<br />');
+        const cta = slide.cta || '立即抢购';
+        const emoji = slide.emoji || '🎮';
+        const bg = slide.bg || 'linear-gradient(135deg, #ff8a80 0%, #ff6a5a 45%, #ff4e3f 100%)';
+        if (!title && !slide.bg) {
+          return (
+            '<div class="cat-banner-slide' +
+            extra +
+            '" data-slide-index="' +
+            index +
+            '" style="background:#eceff3;display:flex;align-items:center;justify-content:center;">' +
+            '<span style="font-size:11px;color:#8b95a1;">请设置图片或链接</span>' +
+            linkHtml +
+            '</div>'
+          );
+        }
+        return (
+          '<div class="cat-banner-slide' +
+          extra +
+          '" data-slide-index="' +
+          index +
+          '" style="background:' +
+          bg +
+          ';">' +
+          '<div><div class="cat-banner-title">' +
+          title +
+          '</div><span class="cat-banner-cta">' +
+          cta +
+          '</span></div>' +
+          '<div class="cat-banner-emoji">' +
+          emoji +
+          '</div>' +
+          linkHtml +
+          '</div>'
+        );
+      }
+
+      /**
+       * 生成分类 showcase 楼层顶部轮播 Banner 的 HTML（含无缝循环克隆层与指示点）。
+       * @param {{ id: string }} floor 当前楼层
+       * @param {object} bannerConfig ensureCategoryBannerConfig 返回值
+       * @returns {string}
+       */
+      function buildCategoryShowcaseBannerSectionMarkup(floor, bannerConfig) {
+        const radius = Math.max(0, Math.min(24, Number(bannerConfig.radius) || 12));
+        const realCount = bannerConfig.slides.length;
+        const useSeamlessLoop = bannerConfig.loop !== false && realCount > 1;
+        let slidesMarkup = bannerConfig.slides
+          .map(function (slide, index) {
+            return buildCategoryShowcaseSlideHtml(slide, index, '');
+          })
+          .join('');
+        if (useSeamlessLoop) {
+          slidesMarkup += buildCategoryShowcaseSlideHtml(bannerConfig.slides[0], 0, 'cat-banner-slide--loop-clone');
+        }
+        const dotsMarkup = realCount > 1
+          ? '<div class="cat-banner-dots">' + bannerConfig.slides.map(function (_, index) {
+            return '<span data-dot-index="' + index + '"' + (index === 0 ? ' class="active"' : '') + '></span>';
+          }).join('') + '</div>'
+          : '';
+        return (
+          '<div class="cat-banner" data-banner-floor-id="' +
+          escapeHtmlAttr(floor.id) +
+          '" data-banner-interval="' +
+          (Number(bannerConfig.intervalMs) || 5000) +
+          '" data-banner-loop="' +
+          (bannerConfig.loop !== false ? '1' : '0') +
+          '" data-banner-seamless="' +
+          (useSeamlessLoop ? '1' : '0') +
+          '" data-banner-real-count="' +
+          realCount +
+          '" style="border-radius:' +
+          radius +
+          'px;">' +
+          '<div class="cat-banner-track">' +
+          slidesMarkup +
+          '</div>' +
+          dotsMarkup +
+          '</div>'
+        );
+      }
+
+      /**
+       * 生成分类页2（数码设计稿）画布：左侧长导航 + 右侧 Banner + 单块白卡三列子类网格。
+       * @param {{ id: string }} floor 楼层
+       * @param {string} bannerSectionHtml 由 buildCategoryShowcaseBannerSectionMarkup 生成的 HTML
+       * @returns {string}
+       */
+      function buildCategoryShowcasePage2CanvasMarkup(floor, bannerSectionHtml) {
+        const leftNavLabels = [
+          '数码',
+          '男装潮流服',
+          '生鲜蔬菜',
+          '食品',
+          '女装服饰',
+          '进口',
+          '鞋袜内衣',
+          '家装百货',
+          '手机',
+          '旅行大箱包',
+          '母婴营养',
+          '饰品',
+        ];
+        const leftNavHtml = leftNavLabels
+          .map(function (label, index) {
+            const activeClass = index === 0 ? ' active' : '';
+            return '<div class="cat-nav-item' + activeClass + '"><span>' + label + '</span></div>';
+          })
+          .join('');
+        const gridItems = [
+          ['笔记本电脑', 'blue'],
+          ['平板电脑', ''],
+          ['整体一体机', 'green'],
+          ['智能手表', 'orange'],
+          ['耳机耳麦', ''],
+          ['平板电脑', 'blue'],
+          ['音响', 'green'],
+          ['家庭影院', 'orange'],
+          ['影棚设备', 'blue'],
+          ['平衡车', ''],
+          ['手机', 'green'],
+          ['儿童手表', 'orange'],
+        ];
+        const gridHtml =
+          '<div class="cat-second-grid">' +
+          gridItems
+            .map(function (pair) {
+              const text = pair[0];
+              const tone = pair[1];
+              const iconClass = tone ? 'cat-second-icon ' + tone : 'cat-second-icon';
+              return (
+                '<div class="cat-second-item"><div class="' +
+                iconClass +
+                '"></div><div class="cat-second-text">' +
+                text +
+                '</div></div>'
+              );
+            })
+            .join('') +
+          '</div>';
+        return (
+          '<div class="canvas-block canvas-block-category-showcase cat-preset-page2">' +
+          '<div class="cat-page">' +
+          '<aside class="cat-left">' +
+          leftNavHtml +
+          '</aside>' +
+          '<section class="cat-right">' +
+          bannerSectionHtml +
+          '<div class="cat-second-wrap">' +
+          gridHtml +
+          '</div>' +
+          '</section>' +
+          '</div>' +
+          '</div>'
+        );
+      }
+
+      /**
+       * 生成分类页3画布：左侧类目 + 右侧横向子类 Tab + 商品列表卡片 + 底部「没有更多了」。
+       * @param {{ id: string }} floor 楼层
+       * @returns {string}
+       */
+      function buildCategoryShowcasePage3CanvasMarkup(floor) {
+        const fid = floor && floor.id ? escapeHtmlAttr(floor.id) : '';
+        const leftNavLabels = [
+          '数码',
+          '男装潮流服',
+          '生鲜蔬菜',
+          '食品',
+          '女装服饰',
+          '进口',
+          '鞋袜内衣',
+          '家装百货',
+          '手机',
+          '旅行大箱包',
+          '母婴营养',
+          '饰品',
+        ];
+        const leftNavHtml = leftNavLabels
+          .map(function (label, index) {
+            const activeClass = index === 0 ? ' active' : '';
+            return '<div class="cat-nav-item' + activeClass + '"><span>' + label + '</span></div>';
+          })
+          .join('');
+        const subTabs = ['希维尔', '依泽瑞尔', '提莫', '崔丝'];
+        const tabsHtml =
+          '<div class="cat-p3-tabs-wrap">' +
+          '<div class="cat-p3-tabs-scroll">' +
+          subTabs
+            .map(function (name, i) {
+              const ac = i === 0 ? ' active' : '';
+              return '<span class="cat-p3-tab' + ac + '">' + name + '</span>';
+            })
+            .join('') +
+          '</div>' +
+          '<button type="button" class="cat-p3-tabs-more" aria-label="展开" title="展开">▼</button>' +
+          '</div>';
+        const titleText =
+          '大型犬只野兽派洗剪吹凶悍大叔是洗澡澡，东分三凤逆天，大型犬只野兽派洗剪吹凶悍大叔是洗澡澡。';
+        const specText = '灰色 66CM 100g可手洗';
+        const thumbBgs = [
+          'linear-gradient(145deg, #c62828 0%, #e53935 45%, #ffab91 100%)',
+          'linear-gradient(145deg, #8d6e63 0%, #bcaaa4 40%, #efebe9 100%)',
+          'linear-gradient(145deg, #b0bec5 0%, #eceff1 50%, #fafafa 100%)',
+          'linear-gradient(145deg, #ec407a 0%, #f48fb1 50%, #fce4ec 100%)',
+        ];
+        const cardsHtml = thumbBgs
+          .map(function (bg) {
+            return (
+              '<div class="cat-p3-card">' +
+              '<div class="cat-p3-card-img" style="background-image:' +
+              bg +
+              ';"></div>' +
+              '<div class="cat-p3-card-body">' +
+              '<div class="cat-p3-card-title">' +
+              titleText +
+              '</div>' +
+              '<div class="cat-p3-card-spec">' +
+              specText +
+              '</div>' +
+              '<div class="cat-p3-card-row">' +
+              '<div class="cat-p3-price">' +
+              '<span class="cat-p3-price-yuan">¥</span>' +
+              '<span class="cat-p3-price-num">198</span>' +
+              '<span class="cat-p3-price-dec">.98</span>' +
+              '</div>' +
+              '<div class="cat-p3-add" aria-hidden="true">+</div>' +
+              '</div>' +
+              '</div>' +
+              '</div>'
+            );
+          })
+          .join('');
+        return (
+          '<div class="canvas-block canvas-block-category-showcase cat-preset-page3"' +
+          (fid ? ' data-floor-id="' + fid + '"' : '') +
+          '>' +
+          '<div class="cat-page">' +
+          '<aside class="cat-left">' +
+          leftNavHtml +
+          '</aside>' +
+          '<section class="cat-right">' +
+          tabsHtml +
+          '<div class="cat-p3-list">' +
+          cardsHtml +
+          '</div>' +
+          '<div class="cat-p3-footer">没有更多了</div>' +
+          '</section>' +
+          '</div>' +
+          '</div>'
+        );
+      }
+
+      /**
+       * 生成分类页4画布：无左侧类目栏，顶部横向子类 Tab + 商品横卡列表 + 「没有更多了」。
+       * @param {{ id?: string }} floor 楼层
+       * @returns {string}
+       */
+      function buildCategoryShowcasePage4CanvasMarkup(floor) {
+        const fid = floor && floor.id ? escapeHtmlAttr(floor.id) : '';
+        const subTabs = ['希维尔', '依泽瑞尔', '提莫', '崔尔斯', '卡莎'];
+        const tabsHtml =
+          '<div class="cat-p4-tabs-wrap">' +
+          '<div class="cat-p4-tabs-scroll">' +
+          subTabs
+            .map(function (name, i) {
+              const ac = i === 0 ? ' active' : '';
+              return '<span class="cat-p4-tab' + ac + '">' + name + '</span>';
+            })
+            .join('') +
+          '</div>' +
+          '<button type="button" class="cat-p4-tabs-more" aria-label="展开" title="展开">▼</button>' +
+          '</div>';
+        const titleText =
+          '大型犬只野兽派洗剪吹凶悍大叔是洗澡澡，东分三凤逆天，大型犬只野兽派洗剪吹凶悍大叔是洗澡澡。';
+        const specText = '灰色 66CM 100g可手洗';
+        const thumbBgs = [
+          'linear-gradient(145deg, #c62828 0%, #e53935 45%, #ffab91 100%)',
+          'linear-gradient(145deg, #37474f 0%, #546e7a 35%, #bcaaa4 70%, #efebe9 100%)',
+          'linear-gradient(145deg, #81d4fa 0%, #b3e5fc 40%, #eceff1 100%)',
+          'linear-gradient(145deg, #ec407a 0%, #f48fb1 50%, #fce4ec 100%)',
+        ];
+        const cardsHtml = thumbBgs
+          .map(function (bg) {
+            return (
+              '<div class="cat-p4-card">' +
+              '<div class="cat-p4-card-img" style="background-image:' +
+              bg +
+              ';"></div>' +
+              '<div class="cat-p4-card-body">' +
+              '<div class="cat-p4-card-title">' +
+              titleText +
+              '</div>' +
+              '<div class="cat-p4-card-spec">' +
+              specText +
+              '</div>' +
+              '<div class="cat-p4-card-row">' +
+              '<div class="cat-p4-price">' +
+              '<span class="cat-p4-price-yuan">¥</span>' +
+              '<span class="cat-p4-price-num">198</span>' +
+              '<span class="cat-p4-price-dec">.98</span>' +
+              '</div>' +
+              '<div class="cat-p4-add" aria-hidden="true">+</div>' +
+              '</div>' +
+              '</div>' +
+              '</div>'
+            );
+          })
+          .join('');
+        return (
+          '<div class="canvas-block canvas-block-category-showcase cat-preset-page4"' +
+          (fid ? ' data-floor-id="' + fid + '"' : '') +
+          '>' +
+          '<div class="cat-page cat-page--list-only">' +
+          '<div class="cat-p4-main">' +
+          tabsHtml +
+          '<div class="cat-p4-list">' +
+          cardsHtml +
+          '</div>' +
+          '<div class="cat-p4-footer">没有更多了</div>' +
+          '</div>' +
+          '</div>' +
+          '</div>'
+        );
+      }
+
+      /**
+       * 生成分类页5画布：左侧类目（选中项左侧橙条 + 浅橙底）+ 右侧白底单列商品列表，无 Banner、无顶部 Tab。
+       * @param {{ id?: string }} floor 楼层
+       * @returns {string}
+       */
+      function buildCategoryShowcasePage5CanvasMarkup(floor) {
+        const fid = floor && floor.id ? escapeHtmlAttr(floor.id) : '';
+        const leftNavLabels = [
+          '数码',
+          '男装潮流服',
+          '生鲜蔬菜',
+          '食品',
+          '女装服饰',
+          '进口',
+          '鞋袜内衣',
+          '家装百货',
+          '手机',
+          '旅行大箱包',
+          '母婴营养',
+          '饰品',
+        ];
+        const leftNavHtml = leftNavLabels
+          .map(function (label, index) {
+            const activeClass = index === 0 ? ' active' : '';
+            return '<div class="cat-nav-item' + activeClass + '"><span>' + label + '</span></div>';
+          })
+          .join('');
+        const titleText =
+          '大型犬只野兽派洗剪吹凶悍大叔是洗澡澡，东分三凤逆天，大型犬只野兽派洗剪吹凶悍大叔是洗澡澡。';
+        const specText = '灰色 66CM 100g可手洗';
+        const thumbBgs = [
+          'linear-gradient(145deg, #c62828 0%, #e53935 45%, #ffab91 100%)',
+          'linear-gradient(145deg, #37474f 0%, #546e7a 35%, #bcaaa4 70%, #efebe9 100%)',
+          'linear-gradient(145deg, #81d4fa 0%, #b3e5fc 40%, #eceff1 100%)',
+          'linear-gradient(145deg, #ec407a 0%, #f48fb1 50%, #fce4ec 100%)',
+          'linear-gradient(180deg, #eceff1 0%, #fafafa 40%, #cfd8dc 75%, #90a4ae 100%)',
+        ];
+        const cardsHtml = thumbBgs
+          .map(function (bg) {
+            return (
+              '<div class="cat-p5-card">' +
+              '<div class="cat-p5-card-img" style="background-image:' +
+              bg +
+              ';"></div>' +
+              '<div class="cat-p5-card-body">' +
+              '<div class="cat-p5-card-title">' +
+              titleText +
+              '</div>' +
+              '<div class="cat-p5-card-spec">' +
+              specText +
+              '</div>' +
+              '<div class="cat-p5-card-row">' +
+              '<div class="cat-p5-price">' +
+              '<span class="cat-p5-price-yuan">¥</span>' +
+              '<span class="cat-p5-price-num">198</span>' +
+              '<span class="cat-p5-price-dec">.98</span>' +
+              '</div>' +
+              '<div class="cat-p5-add" aria-hidden="true">+</div>' +
+              '</div>' +
+              '</div>' +
+              '</div>'
+            );
+          })
+          .join('');
+        return (
+          '<div class="canvas-block canvas-block-category-showcase cat-preset-page5"' +
+          (fid ? ' data-floor-id="' + fid + '"' : '') +
+          '>' +
+          '<div class="cat-page">' +
+          '<aside class="cat-left">' +
+          leftNavHtml +
+          '</aside>' +
+          '<section class="cat-right">' +
+          '<div class="cat-p5-list">' +
+          cardsHtml +
+          '</div>' +
+          '<div class="cat-p5-footer">没有更多了</div>' +
+          '</section>' +
+          '</div>' +
+          '</div>'
+        );
+      }
+
+      /**
+       * 根据楼层配置生成画布中单层的预览 HTML。
+       * @param {{ type: string, id?: string, categoryPreset?: string, bannerConfig?: object }} floor 楼层
+       * @returns {string}
+       */
+      function buildGoodsListCanvasMarkup(floor) {
+        var config = floor.goodsListConfig || {};
+        var listStyle = config.listStyle || 'large-single';
+        var backgroundColor = config.backgroundColor || '#ffffff';
+        var showSpuName = config.showSpuName !== false;
+        var showSkuSpec = config.showSkuSpec !== false;
+        var showPrice = config.showPrice !== false;
+        var showTag = config.showTag === true;
+        var cartStyle = config.cartStyle || 'style1';
+        var cornerTag = config.cornerTag || 'none';
+        var customCornerTag = config.customCornerTag || '';
+        var priceDisplay = config.priceDisplay || 'price';
+        var showOriginalPrice = config.showOriginalPrice === true;
+        // 边距和边角样式
+        var pagePadding = config.pagePadding || 0;
+        var goodsPadding = config.goodsPadding !== undefined ? config.goodsPadding : 10;
+        var cornerStyle = config.cornerStyle || 'rounded';
+        var goodsCorner = config.goodsCorner || 'rounded';
+
+        // 使用全局 Mock 商品数据，获取第一页数据（10个商品）
+        var displayGoods = getCurrentPageGoods(goodsPaginationState.currentPage);
+
+        // 角标文本映射
+        var cornerTagText = {
+          'none': '',
+          'new': '新品',
+          'hot': '爆款',
+          'sale': '特价',
+          'group': '拼团',
+          'seckill': '秒杀',
+          'custom': customCornerTag || '自定义'
+        };
+
+        // 生成角标HTML
+        function getCornerTagHtml(tag) {
+          if (tag === 'none') return '';
+          return '<span class="goods-corner-tag ' + tag + '">' + cornerTagText[tag] + '</span>';
+        }
+
+        // 生成价格显示HTML
+        function getPriceHtml(item) {
+          if (!showPrice) return '';
+          var priceHtml = '';
+          if (priceDisplay === 'price') {
+            priceHtml = '<span class="goods-price">¥' + item.price + '</span>';
+            if (showOriginalPrice) {
+              priceHtml += '<span class="goods-original-price">¥' + item.originalPrice + '</span>';
+            }
+          } else if (priceDisplay === 'points') {
+            priceHtml = '<span class="goods-price">' + item.price + '积分</span>';
+          } else {
+            priceHtml = '<span class="goods-price">¥' + item.price + '+' + Math.floor(Math.random() * 100) + '积分</span>';
+          }
+          return priceHtml;
+        }
+
+        // 生成单个商品卡片HTML
+        function buildGoodsItemHtml(item, styleClass) {
+          return '<div class="goods-item ' + styleClass + '" data-goods-id="' + item.id + '">' +
+            '<div class="goods-img-wrap">' +
+              '<div class="goods-img-placeholder"></div>' +
+              getCornerTagHtml(cornerTag) +
+            '</div>' +
+            '<div class="goods-info">' +
+              (showSpuName ? '<div class="goods-name">' + item.name + '</div>' : '') +
+              (showSkuSpec ? '<div class="goods-spec">' + item.spec + '</div>' : '') +
+              (showTag && item.tag ? '<span class="goods-tag">' + item.tag + '</span>' : '') +
+              '<div class="goods-price-row">' +
+                getPriceHtml(item) +
+                '<span class="goods-cart-icon ' + cartStyle + '"></span>' +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        }
+
+        // 根据列表样式生成不同的预览
+        var goodsItems = [];
+        var i, item;
+
+        if (listStyle === 'large-single') {
+          for (i = 0; i < displayGoods.length; i++) {
+            item = displayGoods[i];
+            goodsItems.push(buildGoodsItemHtml(item, 'goods-item-large'));
+          }
+        } else if (listStyle === 'small-double') {
+          for (i = 0; i < displayGoods.length; i++) {
+            item = displayGoods[i];
+            goodsItems.push(buildGoodsItemHtml(item, 'goods-item-small'));
+          }
+        } else if (listStyle === 'detail-list') {
+          for (i = 0; i < displayGoods.length; i++) {
+            item = displayGoods[i];
+            goodsItems.push(buildGoodsItemHtml(item, 'goods-item-detail'));
+          }
+        } else if (listStyle === 'small-triple') {
+          for (i = 0; i < displayGoods.length; i++) {
+            item = displayGoods[i];
+            goodsItems.push(buildGoodsItemHtml(item, 'goods-item-triple'));
+          }
+        } else if (listStyle === 'one-large-two-small') {
+          for (i = 0; i < displayGoods.length; i++) {
+            item = displayGoods[i];
+            if (i % 3 === 0) {
+              // 检查是否有后续商品组成完整的"一大两小"
+              var hasSmallItems = displayGoods[i + 1] || displayGoods[i + 2];
+              if (hasSmallItems) {
+                // 每一行包装在 goods-row 容器中
+                var rowHtml = '<div class="goods-row">';
+                rowHtml += buildGoodsItemHtml(item, 'goods-item-half-large');
+                rowHtml += '<div class="goods-half-small-wrap">';
+                if (displayGoods[i + 1]) {
+                  rowHtml += buildGoodsItemHtml(displayGoods[i + 1], 'goods-item-half-small');
+                }
+                if (displayGoods[i + 2]) {
+                  rowHtml += buildGoodsItemHtml(displayGoods[i + 2], 'goods-item-half-small');
+                }
+                rowHtml += '</div>';
+                rowHtml += '</div>';
+                goodsItems.push(rowHtml);
+                i += 2;
+              } else {
+                // 最后单独一个商品以单列大图样式显示
+                goodsItems.push(buildGoodsItemHtml(item, 'goods-item-large'));
+              }
+            }
+          }
+        } else if (listStyle === 'horizontal-scroll') {
+          for (i = 0; i < displayGoods.length; i++) {
+            item = displayGoods[i];
+            goodsItems.push(
+              '<div class="goods-item goods-item-scroll" data-goods-id="' + item.id + '">' +
+                '<div class="goods-img-wrap">' +
+                  '<div class="goods-img-placeholder"></div>' +
+                  getCornerTagHtml(cornerTag) +
+                '</div>' +
+                '<div class="goods-info">' +
+                  (showSpuName ? '<div class="goods-name">' + item.name + '</div>' : '') +
+                  (showPrice ? '<div class="goods-price-row">' + getPriceHtml(item) + '</div>' : '') +
+                '</div>' +
+              '</div>'
+            );
+          }
+        }
+
+        // 生成加载更多指示器
+        var loadMoreHtml = goodsPaginationState.hasMore
+          ? '<div class="goods-load-more" id="goods-load-more"><span class="load-more-text">上拉加载更多</span></div>'
+          : '<div class="goods-no-more"><span class="no-more-text">没有更多商品了</span></div>';
+
+        // 容器类名
+        var containerClass = 'canvas-block canvas-block-goods-list';
+        if (listStyle === 'large-single') containerClass += ' goods-list-large';
+        else if (listStyle === 'small-double') containerClass += ' goods-list-grid goods-list-double';
+        else if (listStyle === 'detail-list') containerClass += ' goods-list-detail';
+        else if (listStyle === 'small-triple') containerClass += ' goods-list-grid goods-list-triple';
+        else if (listStyle === 'one-large-two-small') containerClass += ' goods-list-one-large';
+        else if (listStyle === 'horizontal-scroll') containerClass += ' goods-list-scroll';
+
+        // 边角样式
+        var cornerClass = cornerStyle === 'square' ? 'corner-square' : 'corner-rounded';
+        containerClass += ' ' + cornerClass;
+
+        // 商品卡片倒角样式
+        var goodsCornerClass = goodsCorner === 'square' ? 'goods-corner-square' : 'goods-corner-rounded';
+
+        // 边距样式
+        var paddingStyle = 'padding:' + pagePadding + 'px;';
+        var gapStyle = '';
+        if (listStyle === 'small-double' || listStyle === 'small-triple') {
+          gapStyle = 'gap:' + goodsPadding + 'px;';
+        } else if (listStyle === 'large-single' || listStyle === 'detail-list' || listStyle === 'one-large-two-small') {
+          gapStyle = 'gap:' + goodsPadding + 'px;';
+        }
+
+        return '<div class="' + containerClass + ' ' + goodsCornerClass + '" style="background:' + backgroundColor + ';' + paddingStyle + gapStyle + '" id="goods-list-container">' +
+          goodsItems.join('') +
+          loadMoreHtml +
+        '</div>';
+      }
+
+      /**
+       * 根据楼层配置生成画布中单层的预览 HTML。
+       * @param {{ type: string, id?: string, categoryPreset?: string, bannerConfig?: object }} floor 楼层
+       * @returns {string}
+       */
+      function createFloorMarkup(floor) {
+        if (floor.type === 'category-showcase') {
+          if (floor.categoryPreset === 'page3') {
+            return buildCategoryShowcasePage3CanvasMarkup(floor);
+          }
+          if (floor.categoryPreset === 'page4') {
+            return buildCategoryShowcasePage4CanvasMarkup(floor);
+          }
+          if (floor.categoryPreset === 'page5') {
+            return buildCategoryShowcasePage5CanvasMarkup(floor);
+          }
+          const bannerConfig = ensureCategoryBannerConfig(floor);
+          const bannerSectionHtml = buildCategoryShowcaseBannerSectionMarkup(floor, bannerConfig);
+          if (floor.categoryPreset === 'page2') {
+            return buildCategoryShowcasePage2CanvasMarkup(floor, bannerSectionHtml);
+          }
+          return `
+            <div class="canvas-block canvas-block-category-showcase">
+              <div class="cat-page">
+                <aside class="cat-left">
+                  <div class="cat-nav-item active"><span>数码</span></div>
+                  <div class="cat-nav-item"><span>男装潮流汇</span></div>
+                  <div class="cat-nav-item"><span>生鲜蔬菜</span></div>
+                  <div class="cat-nav-item"><span>食品</span></div>
+                  <div class="cat-nav-item"><span>女装服饰</span></div>
+                  <div class="cat-nav-item"><span>进口</span></div>
+                  <div class="cat-nav-item"><span>鞋袜内衣</span></div>
+                  <div class="cat-nav-item"><span>家装百货</span></div>
+                  <div class="cat-nav-item"><span>手机</span></div>
+                  <div class="cat-nav-item"><span>旅行大箱包</span></div>
+                </aside>
+                <section class="cat-right">
+                  ${bannerSectionHtml}
+                  <div class="cat-second-wrap">
+                    <div class="cat-second-title">数码配件</div>
+                    <div class="cat-second-grid">
+                      <div class="cat-second-item"><div class="cat-second-icon blue"></div><div class="cat-second-text">笔记本电脑</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon"></div><div class="cat-second-text">平板电脑</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon green"></div><div class="cat-second-text">整体一体机</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon orange"></div><div class="cat-second-text">智能手表</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon"></div><div class="cat-second-text">耳机耳麦</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon blue"></div><div class="cat-second-text">电竞设备</div></div>
+                    </div>
+                  </div>
+                  <div class="cat-third-wrap">
+                    <div class="cat-third-title">影音娱乐</div>
+                    <div class="cat-second-grid">
+                      <div class="cat-second-item"><div class="cat-second-icon green"></div><div class="cat-second-text">蓝牙音箱</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon"></div><div class="cat-second-text">头戴耳机</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon blue"></div><div class="cat-second-text">投影设备</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon orange"></div><div class="cat-second-text">K歌设备</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon blue"></div><div class="cat-second-text">家庭影院</div></div>
+                      <div class="cat-second-item"><div class="cat-second-icon"></div><div class="cat-second-text">游戏主机</div></div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          `;
+        }
+        if (floor.type === 'goods-list') {
+          return buildGoodsListCanvasMarkup(floor);
+        }
+        if (floor.type === 'goods-group') {
+          const config = floor.goodsGroupConfig || {};
+          const menuBgColor = config.menuBgColor || '#ffffff';
+          const menuStyle = config.menuStyle || 'rounded';
+          const listStyle = config.listStyle || 'small-double';
+          const goodsStyle = config.goodsStyle || 'card-shadow';
+          const goodsCorner = config.goodsCorner || 'rounded';
+          const cartStyle = config.cartStyle || 'style1';
+          const showDesc = config.showDesc !== false;
+          const showOriginalPrice = config.showOriginalPrice === true;
+          const showPrice = config.showPrice !== false;
+          const showSales = config.showSales !== false;
+          const showGroupName = config.showGroupName !== false;
+          const textStyle = config.textStyle || 'normal';
+          const pagePadding = config.pagePadding || 0;
+          const goodsPadding = config.goodsPadding || 10;
+          const enableRefresh = config.enableRefresh === true;
+          const groups = config.groups || [
+            { id: 'group-1', name: '推荐', dataSource: 'brand', sortType: 'comprehensive', goodsCount: 20 },
+            { id: 'group-2', name: '新品', dataSource: 'brand', sortType: 'newest' },
+            { id: 'group-3', name: '热销', dataSource: 'brand', sortType: 'sales' },
+          ];
+
+          // 当前激活分组（默认第一个）
+          const activeGroupId = config.activeGroupId || groups[0]?.id || '';
+
+          // 顶部横向菜单
+          let menuHtml = groups.map((group, index) => {
+            const isActive = group.id === activeGroupId;
+            return `<div class="gg-menu-item ${isActive ? 'active' : ''}" data-group-id="${group.id}" data-floor-id="${floor.id}">${group.name}</div>`;
+          }).join('');
+
+          // 商品样式类
+          let goodsItemClass = 'gg-goods-item';
+          if (goodsStyle === 'card-shadow') goodsItemClass += ' card-shadow';
+          if (goodsStyle === 'border-white') goodsItemClass += ' border-white';
+          if (goodsCorner === 'rounded') goodsItemClass += ' rounded';
+          if (goodsCorner === 'square') goodsItemClass += ' square';
+
+          // 标题样式类
+          const titleClass = textStyle === 'bold' ? 'gg-goods-title bold' : 'gg-goods-title';
+
+          // 根据当前分组获取商品数据
+          const currentGroup = groups.find(g => g.id === activeGroupId) || groups[0];
+          const sortType = currentGroup?.sortType || 'comprehensive';
+
+          // 根据排序类型生成不同的商品数据
+          const getGoodsBySortType = (sort) => {
+            const goodsData = {
+              'comprehensive': [
+                { name: '综合推荐商品A', price: '99.00', originalPrice: '129.00', sales: 1234, desc: '精选好物推荐' },
+                { name: '综合推荐商品B', price: '168.00', originalPrice: '199.00', sales: 856, desc: '限时优惠抢购' },
+                { name: '综合推荐商品C', price: '59.00', originalPrice: '79.00', sales: 2341, desc: '热销爆款' },
+                { name: '综合推荐商品D', price: '299.00', originalPrice: '359.00', sales: 567, desc: '品质之选' },
+              ],
+              'sales': [
+                { name: '销量爆款一', price: '49.00', originalPrice: '69.00', sales: 5678, desc: '万人抢购' },
+                { name: '销量爆款二', price: '89.00', originalPrice: '119.00', sales: 4521, desc: '爆款热卖' },
+                { name: '销量爆款三', price: '129.00', originalPrice: '159.00', sales: 3890, desc: '销量领先' },
+                { name: '销量爆款四', price: '199.00', originalPrice: '259.00', sales: 2156, desc: '热销推荐' },
+              ],
+              'newest': [
+                { name: '新品首发一', price: '199.00', originalPrice: '249.00', sales: 234, desc: '新品首发' },
+                { name: '新品首发二', price: '259.00', originalPrice: '299.00', sales: 189, desc: '最新上市' },
+                { name: '新品首发三', price: '89.00', originalPrice: '99.00', sales: 456, desc: '新鲜出炉' },
+                { name: '新品首发四', price: '159.00', originalPrice: '199.00', sales: 321, desc: '新款到货' },
+              ],
+              'comments': [
+                { name: '好评如潮商品A', price: '79.00', originalPrice: '99.00', sales: 890, desc: '好评率99%' },
+                { name: '好评如潮商品B', price: '139.00', originalPrice: '169.00', sales: 678, desc: '口碑之选' },
+                { name: '好评如潮商品C', price: '59.00', originalPrice: '79.00', sales: 1234, desc: '用户推荐' },
+                { name: '好评如潮商品D', price: '229.00', originalPrice: '279.00', sales: 567, desc: '好评推荐' },
+              ],
+              'goodRate': [
+                { name: '高评分商品A', price: '109.00', originalPrice: '139.00', sales: 456, desc: '评分4.9' },
+                { name: '高评分商品B', price: '189.00', originalPrice: '229.00', sales: 345, desc: '评分4.8' },
+                { name: '高评分商品C', price: '69.00', originalPrice: '89.00', sales: 789, desc: '评分5.0' },
+                { name: '高评分商品D', price: '149.00', originalPrice: '179.00', sales: 567, desc: '评分4.9' },
+              ],
+            };
+            return goodsData[sort] || goodsData['comprehensive'];
+          };
+
+          const mockGoods = getGoodsBySortType(sortType);
+
+          let goodsHtml = mockGoods.map(goods => {
+            const descHtml = showDesc ? `<div class="gg-goods-desc">${goods.desc}</div>` : '';
+            const salesHtml = showSales ? `<div class="gg-goods-sales">已售${goods.sales}</div>` : '';
+            const priceHtml = showPrice ? `<div class="gg-goods-price">¥${goods.price}</div>` : '';
+            const originalPriceHtml = showOriginalPrice ? `<span class="gg-goods-original-price">¥${goods.originalPrice}</span>` : '';
+
+            return `
+              <div class="${goodsItemClass}">
+                <div class="gg-goods-img"></div>
+                <div class="gg-goods-info">
+                  <div class="${titleClass}">${goods.name}</div>
+                  ${descHtml}
+                  ${salesHtml}
+                  <div class="gg-goods-price-row">
+                    ${priceHtml}${originalPriceHtml}
+                    <div class="gg-cart-btn ${cartStyle}"></div>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+
+          // 列表样式类
+          let listClass = 'gg-goods-list';
+          if (listStyle === 'large-single') listClass += ' single-mode';
+          else if (listStyle === 'small-triple') listClass += ' triple-mode';
+          else if (listStyle === 'horizontal-scroll') listClass += ' scroll-mode';
+
+          // 分组标题
+          const headerTitle = currentGroup?.name || '商品列表';
+
+          // 商品显示个数
+          const goodsCount = currentGroup?.goodsCount || 20;
+
+          return `
+            <div class="canvas-block canvas-block-goods-group" style="padding: ${pagePadding}px;" data-floor-id="${floor.id}">
+              <div class="gg-container">
+                ${showGroupName ? `<div class="gg-menu" style="background: ${menuBgColor};">${menuHtml}</div>` : ''}
+                <div class="gg-content">
+                  ${enableRefresh ? `<div class="gg-header"><span class="gg-header-title">${headerTitle}</span><div class="gg-refresh-btn">换一批</div></div>` : ''}
+                  <div class="${listClass}" style="gap: ${goodsPadding}px;">
+                    ${goodsHtml}
+                  </div>
+                  <div class="gg-load-all-btn" data-floor-id="${floor.id}" data-group-id="${activeGroupId}">
+                    <span>加载全部</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+        if (floor.type === 'title') {
+          var config = floor.titleConfig || {};
+          var title = config.title || '标题文字';
+          var subtitle = config.subtitle || '';
+          var align = config.align || 'left';
+          var titleSize = config.titleSize || 18;
+          var titleColor = config.titleColor || '#333333';
+          var titleWeight = config.titleWeight || 'bold';
+          var subtitleSize = config.subtitleSize || 13;
+          var subtitleColor = config.subtitleColor || '#8c8c8c';
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var paddingTop = config.paddingTop !== undefined ? config.paddingTop : 14;
+          var paddingBottom = config.paddingBottom !== undefined ? config.paddingBottom : 14;
+          var paddingLeft = config.paddingLeft !== undefined ? config.paddingLeft : 14;
+          var paddingRight = config.paddingRight !== undefined ? config.paddingRight : 14;
+          var cornerStyle = config.cornerStyle || 'rounded';
+
+          var titleStyle = 'font-size:' + titleSize + 'px;color:' + titleColor + ';font-weight:' + titleWeight + ';';
+          var subtitleStyle = 'font-size:' + subtitleSize + 'px;color:' + subtitleColor + ';margin-top:6px;';
+          var borderRadius = cornerStyle === 'rounded' ? '8px' : '0';
+          var containerStyle = 'text-align:' + align + ';padding:' + paddingTop + 'px ' + paddingRight + 'px ' + paddingBottom + 'px ' + paddingLeft + 'px;background:' + backgroundColor + ';border-radius:' + borderRadius + ';';
+
+          var subtitleHtml = subtitle ? '<div class="canvas-title-subtitle" style="' + subtitleStyle + '">' + subtitle + '</div>' : '';
+
+          return '<div class="canvas-block canvas-block-title" style="' + containerStyle + '">' +
+            '<div class="canvas-title-text" style="' + titleStyle + '">' + title + '</div>' +
+            subtitleHtml +
+          '</div>';
+        }
+        if (floor.type === 'text') {
+          var config = floor.textConfig || {};
+          var content = config.content || '在此输入文本内容...';
+          var align = config.align || 'left';
+          var fontSize = config.fontSize || 14;
+          var fontColor = config.fontColor || '#333333';
+          var fontWeight = config.fontWeight || 'normal';
+          var lineHeight = config.lineHeight || 1.6;
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var paddingTop = config.paddingTop !== undefined ? config.paddingTop : 12;
+          var paddingBottom = config.paddingBottom !== undefined ? config.paddingBottom : 12;
+          var paddingLeft = config.paddingLeft !== undefined ? config.paddingLeft : 14;
+          var paddingRight = config.paddingRight !== undefined ? config.paddingRight : 14;
+          var cornerStyle = config.cornerStyle || 'rounded';
+
+          var textStyle = 'font-size:' + fontSize + 'px;color:' + fontColor + ';font-weight:' + fontWeight + ';line-height:' + lineHeight + ';';
+          var borderRadius = cornerStyle === 'rounded' ? '8px' : '0';
+          var containerStyle = 'text-align:' + align + ';padding:' + paddingTop + 'px ' + paddingRight + 'px ' + paddingBottom + 'px ' + paddingLeft + 'px;background:' + backgroundColor + ';border-radius:' + borderRadius + ';';
+
+          return '<div class="canvas-block canvas-block-text" style="' + containerStyle + '">' +
+            '<div class="canvas-text-content" style="' + textStyle + '">' + content + '</div>' +
+          '</div>';
+        }
+        if (floor.type === 'link') {
+          var config = floor.linkConfig || {};
+          var text = config.text || '点击跳转';
+          var icon = config.icon || '';
+          var linkType = config.linkType || 'page';
+          var linkUrl = config.linkUrl || '';
+          var textColor = config.textColor || '#1677ff';
+          var fontSize = config.fontSize || 14;
+          var textDecoration = config.textDecoration || 'underline';
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var paddingTop = config.paddingTop !== undefined ? config.paddingTop : 10;
+          var paddingBottom = config.paddingBottom !== undefined ? config.paddingBottom : 10;
+          var paddingLeft = config.paddingLeft !== undefined ? config.paddingLeft : 14;
+          var paddingRight = config.paddingRight !== undefined ? config.paddingRight : 14;
+          var cornerStyle = config.cornerStyle || 'rounded';
+
+          var linkStyle = 'font-size:' + fontSize + 'px;color:' + textColor + ';text-decoration:' + textDecoration + ';cursor:pointer;';
+          var borderRadius = cornerStyle === 'rounded' ? '8px' : '0';
+          var containerStyle = 'padding:' + paddingTop + 'px ' + paddingRight + 'px ' + paddingBottom + 'px ' + paddingLeft + 'px;background:' + backgroundColor + ';border-radius:' + borderRadius + ';';
+          var iconHtml = icon ? '<span style="margin-right:6px;">' + icon + '</span>' : '';
+
+          return '<div class="canvas-block canvas-block-link" style="' + containerStyle + '">' +
+            '<a class="canvas-link-text" style="' + linkStyle + '" onclick="event.preventDefault();">' + iconHtml + text + '</a>' +
+          '</div>';
+        }
+        if (floor.type === 'big-bg-image') {
+          var config = floor.bigBgImageConfig || {};
+          var backgroundImage = config.backgroundImage || '';
+          var backgroundColor = config.backgroundColor || '#f5f5f5';
+          var backgroundSize = config.backgroundSize || 'cover';
+          var backgroundPosition = config.backgroundPosition || 'center';
+          var backgroundRepeat = config.backgroundRepeat || 'no-repeat';
+          var height = config.height || 200;
+          var content = config.content || '';
+          var contentColor = config.contentColor || '#ffffff';
+          var pagePadding = config.pagePadding || 0;
+
+          var bgStyle = 'background-color:' + backgroundColor + ';';
+          if (backgroundImage) {
+            bgStyle += 'background-image:url(' + backgroundImage + ');background-size:' + backgroundSize + ';background-position:' + backgroundPosition + ';background-repeat:' + backgroundRepeat + ';';
+          }
+          var contentHtml = content ? '<div class="big-bg-content" style="color:' + contentColor + ';font-size:16px;font-weight:500;text-align:center;padding:20px;">' + content + '</div>' : '';
+
+          return '<div class="canvas-block canvas-block-big-bg" style="' + bgStyle + 'height:' + height + 'px;display:flex;align-items:center;justify-content:center;margin:0 ' + pagePadding + 'px;">' + contentHtml + '</div>';
+        }
+        if (floor.type === 'search-bar') {
+          const config = floor.searchBarConfig || {};
+          const placeholder = config.placeholder || '搜索商品、优惠券、活动';
+          const bgColor = config.backgroundColor || '#f3f6fb';
+          const borderRadius = config.borderRadius || 17;
+          const height = config.height || 34;
+          const pagePadding = config.pagePadding !== undefined ? config.pagePadding : 12;
+          return `<div class="canvas-searchbar" style="background: ${bgColor}; border-radius: ${borderRadius}px; height: ${height}px; margin: 10px ${pagePadding}px;">${placeholder}</div>`;
+        }
+        // 轮播图组件渲染
+        if (floor.type === 'carousel') {
+          var config = floor.carouselConfig || {};
+          var slides = config.slides || [];
+          var height = config.height || 180;
+          var imageCorner = config.imageCorner || 'rounded';
+          var cornerStyle = config.cornerStyle || 'rounded';
+          var autoplay = config.autoplay !== false;
+          var interval = config.interval || 3000;
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var dotStyle = config.dotStyle || 'round';
+          var dotPosition = config.dotPosition || 'bottom';
+          var pagePadding = config.pagePadding || 0;
+
+          // 图片边角
+          var imageBorderRadius = imageCorner === 'square' ? '0' : '8px';
+
+          // 延伸样式 - 使用第一张有图片的slide的extendHeight和extendMode
+          var extendLayerHtml = '';
+          var extendContainerStyle = '';
+          var hasExtend = false;
+          if (slides.length) {
+            // 获取第一张有图片且有延伸设置的slide
+            var firstSlideWithExtend = slides.find(function(s) {
+              if (!s.image || s.extendHeight <= 0) return false;
+              if (s.extendMode === 'stretch') return s.extendImage;
+              return true; // copy模式只需要主图片
+            });
+            if (firstSlideWithExtend) {
+              hasExtend = true;
+              var extendHeight = firstSlideWithExtend.extendHeight;
+              var extendMode = firstSlideWithExtend.extendMode || 'copy';
+              var extendImgStyle = '';
+              var extendImgSrc = '';
+
+              if (extendMode === 'stretch' && firstSlideWithExtend.extendImage) {
+                // 拉伸填充模式：使用延伸图片
+                extendImgSrc = firstSlideWithExtend.extendImage;
+                extendImgStyle = 'width:100%;height:100%;object-fit:cover;';
+              } else {
+                // 复制重复模式：使用主图片，定位到顶部
+                extendImgSrc = firstSlideWithExtend.image;
+                // 使用较大的高度让图片顶部区域重复填充延伸区域
+                extendImgStyle = 'width:100%;height:auto;min-height:100%;object-fit:cover;object-position:top;';
+              }
+
+              // 延伸层使用绝对定位向上延伸
+              // z-index 设为 0，上方组件应有更高的 z-index 来遮挡延伸层
+              // 容器设置 overflow:visible 让延伸层能突破边界
+              extendLayerHtml = '<div class="carousel-extend-layer" style="position:absolute;top:-' + extendHeight + 'px;left:0;right:0;height:' + extendHeight + 'px;z-index:0;overflow:hidden;border-radius:' + imageBorderRadius + ' ' + imageBorderRadius + ' 0 0;pointer-events:none;">' +
+                '<img src="' + extendImgSrc + '" style="' + extendImgStyle + 'border-radius:' + imageBorderRadius + ' ' + imageBorderRadius + ' 0 0;" alt="延伸背景" />' +
+              '</div>';
+              // 容器设置 overflow:visible 让延伸层突破边界，position:relative 作为定位基准
+              extendContainerStyle = 'position:relative;overflow:visible;';
+            }
+          }
+
+          // 如果没有图片，显示占位
+          if (!slides.length || slides.every(function(s) { return !s.image; })) {
+            var placeholderRadius = imageCorner === 'square' ? '0' : '8px';
+            return '<div class="canvas-carousel" style="background:#f5f5f5;height:' + height + 'px;border-radius:' + placeholderRadius + ';margin:10px ' + pagePadding + 'px;display:flex;align-items:center;justify-content:center;border:1px dashed var(--border);">' +
+              '<div style="text-align:center;color:var(--text-muted);">' +
+                '<div style="font-size:32px;margin-bottom:8px;">🖼️</div>' +
+                '<div style="font-size:13px;">点击添加轮播图片</div>' +
+              '</div>' +
+            '</div>';
+          }
+
+          // 生成轮播图HTML
+          var slidesHtml = slides.map(function(slide, index) {
+            if (slide.image) {
+              return '<div class="carousel-slide" style="position:relative;width:100%;height:' + height + 'px;flex-shrink:0;">' +
+                '<img src="' + slide.image + '" style="width:100%;height:100%;object-fit:cover;border-radius:' + imageBorderRadius + ';" alt="轮播图' + (index + 1) + '" />' +
+              '</div>';
+            }
+            return '';
+          }).join('');
+
+          // 生成指示点（根据圆点样式）
+          var validSlides = slides.filter(function(s) { return s.image; });
+          var dotsHtml = validSlides.map(function(_, index) {
+            if (dotStyle === 'bar') {
+              // 长条形
+              return '<span style="width:' + (index === 0 ? '16px' : '8px') + ';height:3px;border-radius:2px;background:' + (index === 0 ? '#ff6b35' : '#ffffff') + ';margin:0 2px;display:inline-block;transition:width 0.2s;"></span>';
+            } else {
+              // 圆形
+              return '<span style="width:6px;height:6px;border-radius:50%;background:' + (index === 0 ? '#ff6b35' : '#ffffff') + ';margin:0 3px;display:inline-block;"></span>';
+            }
+          }).join('');
+
+          // 圆点位置样式
+          var dotsContainerStyle = dotPosition === 'inside'
+            ? 'position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;'
+            : 'display:flex;justify-content:center;margin-top:8px;';
+
+          // 边角样式
+          var containerBorderRadius = cornerStyle === 'square' ? '0' : '8px';
+
+          // 延伸模式下，容器顶部不需要特殊圆角处理（延伸层已单独处理圆角）
+          var carouselImageRadius = imageBorderRadius;
+
+          return '<div class="canvas-carousel" style="background:' + backgroundColor + ';padding:10px ' + pagePadding + 'px;border-radius:' + containerBorderRadius + ';' + extendContainerStyle + '">' +
+            extendLayerHtml +
+            '<div class="carousel-wrapper" style="position:relative;overflow:hidden;border-radius:' + carouselImageRadius + ';">' +
+              '<div class="carousel-track" style="display:flex;transition:transform 0.3s ease;">' +
+                slidesHtml +
+              '</div>' +
+              (dotsHtml ? '<div style="' + dotsContainerStyle + '">' + dotsHtml + '</div>' : '') +
+            '</div>' +
+          '</div>';
+        }
+        // 图文导航组件渲染
+        if (floor.type === 'icon-nav') {
+          var config = floor.iconNavConfig || {};
+          var template = config.template || 'image-nav';
+          var layoutStyle = config.layoutStyle || 'fixed';
+          var rows = config.rows || 1;
+          var navItems = config.navItems || [];
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var textColor = config.textColor || '#333333';
+          var textSize = config.textSize || 12;
+          var pagePadding = config.pagePadding || 0;
+          var cornerStyle = config.cornerStyle || 'rounded';
+          var imageCorner = config.imageCorner || 'rounded';
+
+          // 边角样式
+          var containerBorderRadius = cornerStyle === 'square' ? '0' : '8px';
+          var imageBorderRadius = imageCorner === 'square' ? '0' : '8px';
+          var smallImageBorderRadius = imageCorner === 'square' ? '0' : '4px';
+
+          // 如果没有导航项，显示占位
+          if (!navItems.length) {
+            return '<div class="canvas-icon-nav" style="background:' + backgroundColor + ';padding:15px ' + pagePadding + 'px;display:flex;justify-content:center;align-items:center;border:1px dashed var(--border);min-height:80px;border-radius:' + containerBorderRadius + ';">' +
+              '<span style="color:var(--text-muted);font-size:13px;">点击添加导航项</span>' +
+            '</div>';
+          }
+
+          var navItemsCount = navItems.length;
+          var isTextNav = template === 'text-nav';
+          var isMultiRow = layoutStyle === 'fixed' && rows === 2;
+
+          // 生成单个导航项HTML的辅助函数
+          function generateNavItemHtml(item, itemWidthPercent, isTextNav, textSize, textColor) {
+            // 计算每个导航项的样式
+            var itemStyle = 'flex:1;max-width:' + itemWidthPercent + '%;';
+
+            // 图标/图片部分（文字导航不显示）
+            var iconHtml = '';
+            if (!isTextNav) {
+              var iconOrImage = '';
+              if (item.image) {
+                iconOrImage = '<img src="' + item.image + '" style="width:32px;height:32px;object-fit:cover;border-radius:' + smallImageBorderRadius + ';" alt="' + (item.text || '') + '" />';
+              } else if (item.icon) {
+                iconOrImage = '<span style="font-size:28px;line-height:1;">' + item.icon + '</span>';
+              } else {
+                iconOrImage = '<span style="font-size:28px;line-height:1;">📌</span>';
+              }
+              iconHtml = '<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:#f5f5f5;border-radius:' + imageBorderRadius + ';margin-bottom:6px;">' + iconOrImage + '</div>';
+            }
+
+            return '' +
+              '<div class="icon-nav-item" style="display:flex;flex-direction:column;align-items:center;padding:' + (isTextNav ? '12px 4px' : '8px 4px') + ';' + itemStyle + '">' +
+                iconHtml +
+                '<span style="font-size:' + textSize + 'px;color:' + textColor + ';text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60px;">' + (item.text || '导航') + '</span>' +
+              '</div>';
+          }
+
+          var finalHtml = '';
+
+          if (layoutStyle === 'scroll') {
+            // 滑动模式（单行）：固定宽度
+            navItems.forEach(function(item) {
+              finalHtml += '<div class="icon-nav-item" style="display:flex;flex-direction:column;align-items:center;padding:' + (isTextNav ? '12px 4px' : '8px 4px') + ';flex-shrink:0;width:60px;">';
+              if (!isTextNav) {
+                var iconOrImage = '';
+                if (item.image) {
+                  iconOrImage = '<img src="' + item.image + '" style="width:32px;height:32px;object-fit:cover;border-radius:4px;" alt="' + (item.text || '') + '" />';
+                } else if (item.icon) {
+                  iconOrImage = '<span style="font-size:28px;line-height:1;">' + item.icon + '</span>';
+                } else {
+                  iconOrImage = '<span style="font-size:28px;line-height:1;">📌</span>';
+                }
+                finalHtml += '<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:#f5f5f5;border-radius:8px;margin-bottom:6px;">' + iconOrImage + '</div>';
+              }
+              finalHtml += '<span style="font-size:' + textSize + 'px;color:' + textColor + ';text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60px;">' + (item.text || '导航') + '</span>';
+              finalHtml += '</div>';
+            });
+
+            return '<div class="canvas-icon-nav" style="background:' + backgroundColor + ';padding:10px ' + pagePadding + 'px;border-radius:' + containerBorderRadius + ';">' +
+              '<div class="icon-nav-wrapper" style="display:flex;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;">' +
+                finalHtml +
+              '</div>' +
+            '</div>';
+          } else if (isMultiRow) {
+            // 固定两行模式：平均分配到两行
+            var firstRowCount = Math.ceil(navItemsCount / 2); // 第一行数量
+            var secondRowCount = Math.floor(navItemsCount / 2); // 第二行数量
+
+            // 第一行
+            var firstRowHtml = '';
+            var firstRowItemWidthPercent = firstRowCount > 0 ? (100 / firstRowCount) : 20;
+            for (var i = 0; i < firstRowCount; i++) {
+              firstRowHtml += generateNavItemHtml(navItems[i], firstRowItemWidthPercent, isTextNav, textSize, textColor);
+            }
+
+            // 第二行
+            var secondRowHtml = '';
+            var secondRowItemWidthPercent = secondRowCount > 0 ? (100 / secondRowCount) : firstRowItemWidthPercent;
+            for (var j = firstRowCount; j < navItemsCount; j++) {
+              secondRowHtml += generateNavItemHtml(navItems[j], secondRowItemWidthPercent, isTextNav, textSize, textColor);
+            }
+
+            return '<div class="canvas-icon-nav" style="background:' + backgroundColor + ';padding:10px ' + pagePadding + 'px;border-radius:' + containerBorderRadius + ';">' +
+              '<div class="icon-nav-row" style="display:flex;">' + firstRowHtml + '</div>' +
+              (secondRowHtml ? '<div class="icon-nav-row" style="display:flex;">' + secondRowHtml + '</div>' : '') +
+            '</div>';
+          } else {
+            // 固定一行模式
+            var itemWidthPercent = navItemsCount > 0 ? (100 / navItemsCount) : 20;
+            navItems.forEach(function(item) {
+              finalHtml += generateNavItemHtml(item, itemWidthPercent, isTextNav, textSize, textColor);
+            });
+
+            return '<div class="canvas-icon-nav" style="background:' + backgroundColor + ';padding:10px ' + pagePadding + 'px;border-radius:' + containerBorderRadius + ';">' +
+              '<div class="icon-nav-wrapper" style="display:flex;flex-wrap:nowrap;">' +
+                finalHtml +
+              '</div>' +
+            '</div>';
+          }
+        }
+        // 悬浮组件渲染
+        if (floor.type === 'float-button') {
+          var config = floor.floatButtonConfig || {};
+          var position = config.position || 'right';
+          var bottomMargin = config.bottomMargin || 80;
+          var buttonGap = config.buttonGap || 12;
+          var buttons = config.buttons || [];
+
+          if (buttons.length === 0) {
+            buttons = [{ type: 'back-top', name: '置顶', backgroundColor: '#ff6b35', iconColor: '#ffffff', buttonSize: 44, borderRadius: 50 }];
+          }
+
+          // 生成按钮HTML
+          var buttonsHtml = buttons.map(function(btn) {
+            var btnType = btn.type || 'back-top';
+            var bgColor = btn.backgroundColor || '#ff6b35';
+            var iconColor = btn.iconColor || '#ffffff';
+            var btnSize = btn.buttonSize || 44;
+            var btnRadius = btn.borderRadius !== undefined ? btn.borderRadius : 50;
+
+            // 根据类型选择图标
+            var iconSvg = '';
+            if (btnType === 'back-top') {
+              iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="' + iconColor + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>';
+            } else if (btnType === 'cart') {
+              iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="' + iconColor + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>';
+            } else if (btnType === 'service') {
+              iconSvg = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="' + iconColor + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>';
+            }
+
+            return '<div class="float-btn-item" style="width:' + btnSize + 'px;height:' + btnSize + 'px;background:' + bgColor + ';border-radius:' + btnRadius + '%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer;">' +
+              iconSvg +
+            '</div>';
+          }).join('');
+
+          return '<div class="canvas-float-buttons" style="display:flex;flex-direction:column;gap:' + buttonGap + 'px;">' +
+            buttonsHtml +
+          '</div>';
+        }
+        // 电梯导航组件渲染
+        if (floor.type === 'elevator-nav') {
+          var config = floor.elevatorNavConfig || {};
+          var templateType = config.templateType || 'text';
+          var displayMode = config.displayMode || 'scroll';
+          var tagStyle = config.tagStyle || 'underline';
+          var activeBgColor = config.activeBgColor || '#ff6b35';
+          var activeTextColor = config.activeTextColor || activeBgColor;
+          var defaultBgColor = config.defaultBgColor || config.backgroundColor || '#ffffff';
+          var defaultTextColor = config.defaultTextColor || '#333333';
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var tags = config.tags || [];
+          var activeIndex = config.activeIndex || 0;
+          var pagePadding = config.pagePadding || 0;
+          var enableSticky = config.enableSticky || false;
+          var stickyTop = config.stickyTop || 0;
+
+          // 如果没有标签，显示占位
+          if (!tags.length) {
+            return '<div class="canvas-elevator-nav" style="background:' + backgroundColor + ';padding:12px ' + pagePadding + 'px;display:flex;justify-content:center;align-items:center;border:1px dashed var(--border);">' +
+              '<span style="color:var(--text-muted);font-size:13px;">点击添加导航标签</span>' +
+            '</div>';
+          }
+
+          // 根据标签风格生成样式
+          function getTagStyle(index) {
+            var isActive = index === activeIndex;
+            var bg = isActive ? activeBgColor : defaultBgColor;
+            var color = isActive ? activeTextColor : defaultTextColor;
+
+            switch (tagStyle) {
+              case 'bg':
+                return 'background:' + bg + ';color:' + color + ';border-radius:16px;padding:6px 14px;';
+              case 'rounded':
+                return 'background:' + bg + ';color:' + color + ';border-radius:16px;padding:6px 14px;border:1px solid ' + (isActive ? activeBgColor : '#e0e0e0') + ';';
+              case 'square':
+                return 'background:' + bg + ';color:' + color + ';border-radius:4px;padding:6px 14px;border:1px solid ' + (isActive ? activeBgColor : '#e0e0e0') + ';';
+              case 'underline':
+                // 下划线模式：选中时文字颜色与下划线颜色保持一致
+                var underlineColor = isActive ? activeBgColor : 'transparent';
+                var textColor = isActive ? activeBgColor : defaultTextColor;
+                return 'background:transparent;color:' + textColor + ';padding:6px 14px;border-bottom:2px solid ' + underlineColor + ';';
+              default:
+                return 'background:' + bg + ';color:' + color + ';border-radius:16px;padding:6px 14px;';
+            }
+          }
+
+          // 生成标签HTML
+          var tagsHtml = tags.map(function(tag, index) {
+            var tagContent = '';
+            var tagImage = tag.image || '';
+
+            // 根据模板类型生成内容
+            if (templateType === 'image') {
+              // 图片类型：只显示图片
+              if (tagImage) {
+                tagContent = '<img src="' + tagImage + '" style="width:24px;height:24px;object-fit:cover;border-radius:4px;" />';
+              } else {
+                tagContent = '<span style="width:24px;height:24px;background:#f5f5f5;border-radius:4px;display:inline-block;"></span>';
+              }
+            } else if (templateType === 'image-text') {
+              // 图文类型：显示图片+文字
+              if (tagImage) {
+                tagContent = '<img src="' + tagImage + '" style="width:20px;height:20px;object-fit:cover;border-radius:4px;margin-right:6px;vertical-align:middle;" />';
+              } else {
+                tagContent = '<span style="width:20px;height:20px;background:#f5f5f5;border-radius:4px;margin-right:6px;display:inline-block;vertical-align:middle;"></span>';
+              }
+              tagContent += '<span style="vertical-align:middle;">' + (tag.text || '标签') + '</span>';
+            } else {
+              // 文字类型：只显示文字
+              tagContent = tag.text || '标签';
+            }
+
+            return '<span class="elevator-nav-tag" style="' + getTagStyle(index) + 'font-size:14px;white-space:nowrap;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;">' + tagContent + '</span>';
+          }).join('');
+
+          var wrapperStyle = displayMode === 'scroll'
+            ? 'display:flex;overflow-x:auto;gap:10px;padding:0 4px;scrollbar-width:none;-ms-overflow-style:none;'
+            : 'display:flex;flex-wrap:wrap;gap:10px;padding:0 4px;';
+
+          // 吸顶样式
+          var stickyStyle = enableSticky
+            ? 'position:sticky;top:' + stickyTop + 'px;z-index:100;'
+            : '';
+
+          return '<div class="canvas-elevator-nav" style="background:' + backgroundColor + ';padding:10px ' + pagePadding + 'px;' + stickyStyle + '">' +
+            '<div class="elevator-nav-wrapper" style="' + wrapperStyle + '">' +
+              tagsHtml +
+            '</div>' +
+          '</div>';
+        }
+        // 个性化推荐组件渲染
+        if (floor.type === 'personal-recommend') {
+          var config = floor.personalRecommendConfig || {};
+          var recommendRule = config.recommendRule || 'guess';
+          var enableRefresh = config.enableRefresh !== false;
+          var listStyle = config.listStyle || 'small-double';
+          var showGoodsName = config.showGoodsName !== false;
+          var showPrice = config.showPrice !== false;
+          var showSales = config.showSales !== false;
+          var showOriginalPrice = config.showOriginalPrice === true;
+          var goodsCount = config.goodsCount || 6;
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var title = config.title || '为你推荐';
+          var showTitle = config.showTitle !== false;
+          var cartStyle = config.cartStyle || 'style1';
+          // 边距和边角样式
+          var pagePadding = config.pagePadding || 0;
+          var goodsPadding = config.goodsPadding !== undefined ? config.goodsPadding : 10;
+          var cornerStyle = config.cornerStyle || 'rounded';
+          var goodsCorner = config.goodsCorner || 'rounded';
+
+          // 推荐规则名称映射
+          var ruleNames = {
+            'guess': '猜你喜欢',
+            'view-again': '看了又看',
+            'buy-again': '买了又买',
+            'everyone-buy': '大家都在买'
+          };
+
+          // 生成模拟商品数据
+          var mockGoods = [];
+          for (var pr_i = 1; pr_i <= goodsCount; pr_i++) {
+            mockGoods.push({
+              id: 'pr-goods-' + pr_i,
+              name: '推荐商品' + pr_i,
+              price: (Math.random() * 200 + 50).toFixed(2),
+              originalPrice: showOriginalPrice ? (Math.random() * 100 + 200).toFixed(2) : '',
+              sales: Math.floor(Math.random() * 1000),
+              spec: '规格' + pr_i
+            });
+          }
+
+          // 生成单个商品卡片HTML
+          function buildPrGoodsItemHtml(item) {
+            var cardBorderRadius = goodsCorner === 'square' ? '0' : '10px';
+            return '<div class="goods-item" data-goods-id="' + item.id + '">' +
+              '<div class="goods-img-wrap">' +
+                '<div class="goods-img-placeholder"></div>' +
+              '</div>' +
+              '<div class="goods-info">' +
+                (showGoodsName ? '<div class="goods-name">' + item.name + '</div>' : '') +
+                (showSales ? '<div class="goods-spec">' + item.sales + '人付款</div>' : '') +
+                '<div class="goods-price-row">' +
+                  (showPrice ? '<span class="goods-price">¥' + item.price + '</span>' : '') +
+                  (showOriginalPrice && showPrice ? '<span class="goods-original-price">¥' + item.originalPrice + '</span>' : '') +
+                  '<span class="goods-cart-icon ' + cartStyle + '"></span>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          }
+
+          // 根据列表样式生成不同的预览
+          var prGoodsItems = [];
+          var pr_i, pr_item;
+          for (pr_i = 0; pr_i < mockGoods.length; pr_i++) {
+            pr_item = mockGoods[pr_i];
+            // 所有样式使用相同的商品卡片结构，通过父容器的类名控制样式
+            prGoodsItems.push(buildPrGoodsItemHtml(pr_item));
+          }
+
+          // 容器类名
+          var prContainerClass = 'canvas-block canvas-block-goods-list';
+          if (listStyle === 'large-single') prContainerClass += ' goods-list-large';
+          else if (listStyle === 'small-double') prContainerClass += ' goods-list-grid goods-list-double';
+          else if (listStyle === 'detail-list') prContainerClass += ' goods-list-detail';
+          else if (listStyle === 'small-triple') prContainerClass += ' goods-list-grid goods-list-triple';
+          else if (listStyle === 'one-large-two-small') prContainerClass += ' goods-list-one-large';
+          else if (listStyle === 'horizontal-scroll') prContainerClass += ' goods-list-scroll';
+
+          // 边角样式
+          var prCornerClass = cornerStyle === 'square' ? 'corner-square' : 'corner-rounded';
+          prContainerClass += ' ' + prCornerClass;
+
+          // 商品卡片倒角样式
+          var prGoodsCornerClass = goodsCorner === 'square' ? 'goods-corner-square' : 'goods-corner-rounded';
+
+          // 标题HTML
+          var prTitleHtml = '';
+          if (showTitle) {
+            prTitleHtml = '<div class="pr-header" style="grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;padding:0 0 10px 0;">' +
+              '<span style="font-size:16px;font-weight:500;color:#333;">' + title + '</span>' +
+              (enableRefresh ? '<span class="pr-refresh-btn" style="font-size:12px;color:#ff6b35;cursor:pointer;">🔄 换一换</span>' : '') +
+            '</div>';
+          }
+
+          // 间距样式（grid布局时需要设置gap）
+          var prGapStyle = '';
+          if (listStyle === 'small-double' || listStyle === 'small-triple') {
+            prGapStyle = 'gap:' + goodsPadding + 'px;';
+          } else if (listStyle === 'large-single' || listStyle === 'detail-list') {
+            prGapStyle = 'gap:' + goodsPadding + 'px;';
+          }
+
+          return '<div class="' + prContainerClass + ' ' + prGoodsCornerClass + '" style="background:' + backgroundColor + ';padding:' + pagePadding + 'px;' + prGapStyle + '">' +
+            prTitleHtml +
+            prGoodsItems.join('') +
+          '</div>';
+        }
+        // 自定义组件渲染
+        if (floor.type === 'custom-component') {
+          var config = floor.customComponentConfig || {};
+          var customHtml = config.customHtml || '';
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var padding = config.padding || 10;
+          var componentName = config.componentName || '自定义组件';
+          var pagePadding = config.pagePadding || 0;
+
+          // 如果没有自定义内容，显示占位
+          if (!customHtml.trim()) {
+            return '<div class="canvas-custom-component" style="background:' + backgroundColor + ';padding:' + padding + 'px;min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px dashed var(--border);border-radius:8px;margin:0 ' + pagePadding + 'px;">' +
+              '<div style="font-size:32px;margin-bottom:8px;">🧩</div>' +
+              '<div style="font-size:13px;color:var(--text-muted);">' + componentName + '</div>' +
+              '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;">点击编辑HTML代码</div>' +
+            '</div>';
+          }
+
+          return '<div class="canvas-custom-component" style="background:' + backgroundColor + ';padding:' + padding + 'px;margin:0 ' + pagePadding + 'px;">' +
+            customHtml +
+          '</div>';
+        }
+        // ========== 我的页面组件渲染 ==========
+        if (floor.type === 'mine-header') {
+          var config = floor.mineHeaderConfig || {};
+          var avatarUrl = config.avatarUrl || '';
+          var nickname = config.nickname || '用户昵称';
+          var memberLevel = config.memberLevel || '普通会员';
+          var showLevelBadge = config.showLevelBadge !== false;
+          var showSettingsIcon = config.showSettingsIcon !== false;
+          var backgroundColor = config.backgroundColor || '#ff6034';
+          var hex = backgroundColor.replace('#', '');
+          var r = Math.max(0, parseInt(hex.substring(0,2), 16) - 30);
+          var g = Math.max(0, parseInt(hex.substring(2,4), 16) - 20);
+          var b = Math.max(0, parseInt(hex.substring(4,6), 16) - 10);
+          var endColor = '#' + (r < 16 ? '0' : '') + r.toString(16) + (g < 16 ? '0' : '') + g.toString(16) + (b < 16 ? '0' : '') + b.toString(16);
+          var gradientBg = 'linear-gradient(135deg, ' + backgroundColor + ', ' + endColor + ')';
+
+          var avatarSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:28px;height:28px;color:rgba(255,255,255,0.7);"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+          var settingsSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:22px;height:22px;color:#fff;"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>';
+          return '<div class="canvas-block-mine-header" style="background:' + gradientBg + ';">' +
+            '<div class="canvas-mine-avatar">' + (avatarUrl ? '<img src="' + avatarUrl + '" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />' : avatarSvg) + '</div>' +
+            '<div class="canvas-mine-info">' +
+              '<div class="canvas-mine-nickname">' + nickname + '</div>' +
+              (showLevelBadge && memberLevel ? '<div class="canvas-mine-level">' + memberLevel + '</div>' : '') +
+            '</div>' +
+            (showSettingsIcon ? '<div class="canvas-mine-settings">' + settingsSvg + '</div>' : '') +
+          '</div>';
+        }
+        if (floor.type === 'mine-stats-bar') {
+          var config = floor.mineStatsBarConfig || {};
+          var backgroundColor = config.backgroundColor || '#ff6034';
+          var statsItems = config.statsItems || [
+            { value: '1,280', label: '积分中心', link: '/points' },
+            { value: '5', label: '卡券', link: '/coupons' },
+          ];
+
+          var statsHtml = statsItems.map(function(item) {
+            return '<div class="canvas-mine-stat-item">' +
+              '<span class="canvas-mine-stat-value">' + item.value + '</span>' +
+              '<span class="canvas-mine-stat-label">' + item.label + '</span>' +
+            '</div>';
+          }).join('');
+
+          return '<div class="canvas-block-mine-stats-bar" style="background:' + backgroundColor + ';border-radius:0 0 18px 18px;">' +
+            statsHtml +
+          '</div>';
+        }
+        if (floor.type === 'mine-nav-grid') {
+          var config = floor.mineNavGridConfig || {};
+          var title = config.title || '我的服务';
+          var showTitle = config.showTitle !== false;
+          var showViewAll = config.showViewAll || false;
+          var columns = config.columns || 4;
+          var navItems = config.navItems || [
+            { icon: '🎁', name: '积分商城', link: '/points-shop' },
+            { icon: '💰', name: '我的积分', link: '/my-points' },
+            { icon: '👑', name: '会员权益', link: '/member-benefits' },
+            { icon: '🎫', name: '我的优惠券', link: '/my-coupons' },
+          ];
+          var backgroundColor = config.backgroundColor || '#ffffff';
+
+          var isFixedOrders = !!floor.fixed && columns === 5;
+          if (isFixedOrders) {
+            // Fixed order section: use SVG icons from reference, no colored background
+            var itemsHtml = navItems.map(function(item) {
+              var svgIcon = orderIconSvgs[item.name] || '<svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" style="width:24px;height:24px;"><circle cx="12" cy="12" r="10"/></svg>';
+              return '<div class="canvas-mine-nav-item">' +
+                svgIcon +
+                (item.badge ? '<div class="canvas-mine-nav-badge">' + item.badge + '</div>' : '') +
+                '<div class="canvas-mine-nav-name">' + item.name + '</div>' +
+              '</div>';
+            }).join('');
+          } else {
+            // Configurable grid: image or emoji icons with gradient backgrounds
+            var itemsHtml = navItems.map(function(item) {
+              var iconColor = item.iconColor || 'blue';
+              var iconHtml = '';
+              if (item.image) {
+                iconHtml = '<img src="' + item.image + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />';
+              } else {
+                iconHtml = item.icon;
+              }
+              return '<div class="canvas-mine-nav-item">' +
+                '<div class="canvas-mine-nav-icon icon-' + iconColor + '">' + iconHtml + '</div>' +
+                (item.badge ? '<div class="canvas-mine-nav-badge">' + item.badge + '</div>' : '') +
+                '<div class="canvas-mine-nav-name">' + item.name + '</div>' +
+              '</div>';
+            }).join('');
+          }
+
+          var titleHtml = '';
+          if (showTitle) {
+            titleHtml = '<div class="canvas-mine-nav-title">' +
+              '<span>' + title + '</span>' +
+              (showViewAll ? '<span class="canvas-mine-nav-title-link"><span style="display:flex;align-items:center;gap:2px;">查看全部<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:14px;height:14px;"><polyline points="9 18 15 12 9 6"/></svg></span></span>' : '') +
+            '</div>';
+          }
+
+          var navCornerStyle = (config.cornerStyle || 'rounded') === 'rounded' ? '16px' : '0';
+          var navPagePadding = config.pagePadding || 0;
+          return '<div class="canvas-block-mine-nav-grid" style="background:' + backgroundColor + ';border-radius:' + navCornerStyle + ';margin:0 ' + navPagePadding + 'px;">' +
+            titleHtml +
+            '<div class="' + (isFixedOrders ? 'order-tabs' : 'canvas-mine-nav-grid') + '" style="' + (isFixedOrders ? 'display:flex;padding:0 8px 12px;' : 'grid-template-columns:repeat(' + columns + ', 1fr);') + '">' +
+              itemsHtml +
+            '</div>' +
+          '</div>';
+        }
+        if (floor.type === 'mine-menu-list') {
+          var config = floor.mineMenuListConfig || {};
+          var title = config.title || '更多服务';
+          var showTitle = config.showTitle !== false;
+          var menuItems = config.menuItems || [
+            { icon: '📦', name: '我的订单', link: '/my-orders' },
+            { icon: '📍', name: '收货地址', link: '/address' },
+            { icon: '⚙️', name: '设置', link: '/settings' },
+          ];
+          var backgroundColor = config.backgroundColor || '#ffffff';
+
+          var itemsHtml = menuItems.map(function(item) {
+            var iconHtml = '';
+            if (item.image) {
+              iconHtml = '<div class="canvas-mine-menu-icon"><img src="' + item.image + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" /></div>';
+            } else {
+              iconHtml = menuIconSvgs[item.name] || '<div class="canvas-mine-menu-icon">' + item.icon + '</div>';
+            }
+            return '<div class="canvas-mine-menu-item">' +
+              iconHtml +
+              '<div class="canvas-mine-menu-name">' + item.name + '</div>' +
+              '<span class="canvas-mine-menu-arrow">&gt;</span>' +
+            '</div>';
+          }).join('');
+
+          var menuCornerStyle = (config.cornerStyle || 'rounded') === 'rounded' ? '16px' : '0';
+          var menuPagePadding = config.pagePadding || 0;
+          return '<div class="canvas-block-mine-menu-list" style="background:' + backgroundColor + ';border-radius:' + menuCornerStyle + ';margin:0 ' + menuPagePadding + 'px;">' +
+            (showTitle ? '<div class="canvas-mine-menu-title">' + title + '</div>' : '') +
+            itemsHtml +
+          '</div>';
+        }
+        if (floor.type === 'points-card') {
+          var config = floor.pointsCardConfig || {};
+          var currentPoints = config.currentPoints || 12580;
+          var pointsName = config.pointsName || '积分';
+          var showExchangeBtn = config.showExchangeBtn !== false;
+          var backgroundColor = config.backgroundColor || '#fff7e6';
+
+          return '<div class="canvas-block-points-card" style="background:' + backgroundColor + ';">' +
+            '<div class="canvas-points-value">' + currentPoints.toLocaleString() + '</div>' +
+            '<div class="canvas-points-label">可用' + pointsName + '</div>' +
+            (showExchangeBtn ? '<div class="canvas-points-btn">立即兑换</div>' : '') +
+          '</div>';
+        }
+        // 旧的banner组件保留简单渲染
+        if (floor.type === 'banner') {
+          return '<div class="canvas-block canvas-block-banner"></div>';
+        }
+        if (floor.type === 'goods-grid') {
+          return '<div class="canvas-block canvas-block-grid"><span></span><span></span><span></span><span></span></div>';
+        }
+        if (floor.type === 'rich-text') {
+          var config = floor.richTextConfig || {};
+          // 默认内容
+          var defaultRichTextContent = '<p style="color:#1677ff;font-size:15px;">点此编辑『富文本』内容 ----></p>\n<p>你可以对文字进行<strong>加粗</strong>、<em>斜体</em>、<u>下划线</u>、<s>删除线</s>、<span style="color: red;">文字颜色</span>、<span style="background-color: yellow;">背景色</span>、以及字号大小等简单排版操作。</p>\n<p>还可以在这里加入表格了</p>\n<table style="width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px;">\n<thead>\n<tr style="background: #f5f5f5;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">中奖客户</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">发放奖品</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">备注</th></tr>\n</thead>\n<tbody>\n<tr><td style="border: 1px solid #ddd; padding: 8px;">猪猪</td><td style="border: 1px solid #ddd; padding: 8px;">内测码</td><td style="border: 1px solid #ddd; padding: 8px;"><em>已经发放</em></td></tr>\n<tr><td style="border: 1px solid #ddd; padding: 8px;">大麦</td><td style="border: 1px solid #ddd; padding: 8px;">积分</td><td style="border: 1px solid #ddd; padding: 8px;"><a href="#">领取地址</a></td></tr>\n</tbody>\n</table>\n<p>也可在这里插入图片、并对图片加上超级链接，方便用户点击。</p>';
+          var content = config.content || defaultRichTextContent;
+          var backgroundColor = config.backgroundColor || '#ffffff';
+          var backgroundImage = config.backgroundImage || '';
+          var backgroundRepeat = config.backgroundRepeat || 'no-repeat';
+          var backgroundSize = config.backgroundSize || 'cover';
+          var paddingTop = config.paddingTop !== undefined ? config.paddingTop : 14;
+          var paddingBottom = config.paddingBottom !== undefined ? config.paddingBottom : 14;
+          var paddingLeft = config.paddingLeft !== undefined ? config.paddingLeft : 14;
+          var paddingRight = config.paddingRight !== undefined ? config.paddingRight : 14;
+          var maxWidth = config.maxWidth || 0;
+          var textColor = config.textColor || '#333333';
+          var cornerStyle = config.cornerStyle || 'rounded';
+
+          var bgStyle = 'background-color:' + backgroundColor + ';';
+          if (backgroundImage) {
+            bgStyle += 'background-image:url(' + backgroundImage + ');background-repeat:' + backgroundRepeat + ';background-size:' + backgroundSize + ';background-position:center;';
+          }
+          var borderRadius = cornerStyle === 'rounded' ? '14px' : '0';
+          var paddingStyle = 'padding:' + paddingTop + 'px ' + paddingRight + 'px ' + paddingBottom + 'px ' + paddingLeft + 'px;';
+          var maxWStyle = maxWidth > 0 ? 'max-width:' + maxWidth + 'px;' : '';
+          var textStyle = 'color:' + textColor + ';';
+
+          return '<div class="canvas-block canvas-block-rich-text" style="' + bgStyle + paddingStyle + maxWStyle + 'border-radius:' + borderRadius + ';"><div class="rich-text-content" style="' + textStyle + '">' + content + '</div></div>';
+        }
+        if (floor.type === 'category-entry') {
+          return '<div class="canvas-block canvas-block-category"><span></span><span></span><span></span><span></span></div>';
+        }
+        if (floor.type === 'marketing') {
+          return '<div class="canvas-block canvas-block-marketing"></div>';
+        }
+        return '<div class="canvas-block canvas-block-detail"><div class="thumb"></div><div class="info"><span></span><span></span><span></span><span style="width: 65%;"></span></div></div>';
+      }
+
+      /**
+       * 渲染页面布局面板
+       */
+      function renderPageLayoutPanel() {
+        const layoutList = document.getElementById('page-layout-list');
+        if (!layoutList) return;
+
+        const currentPage = getCurrentPage();
+        if (!currentPage || !currentPage.id) {
+          layoutList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 12px;">请先选择页面</div>';
+          renderPageLayoutSideActions();
+          return;
+        }
+
+        const floors = currentPage.floors || [];
+        let html = '';
+
+        // 顶部导航（固定）
+        const isTopNavActive = selectedFloorId === '__top_nav__';
+        html += '<div class="page-layout-item fixed' + (isTopNavActive ? ' active' : '') + '" data-nav-type="top">' +
+          '<div class="item-name">顶部导航</div>' +
+        '</div>';
+
+        // 中间组件列表
+        floors.forEach(function (floor, index) {
+          const isActive = selectedFloorId === floor.id;
+          const floorName = getFloorTypeName(floor.type);
+          const fixedClass = floor.fixed ? ' fixed' : '';
+
+          html += '<div class="page-layout-item' + (isActive ? ' active' : '') + fixedClass + '" data-floor-id="' + floor.id + '">' +
+            '<div class="item-name">' + floorName + '</div>' +
+          '</div>';
+        });
+
+        // 底部导航（固定）
+        const isBottomNavActive = selectedFloorId === '__bottom_nav__';
+        html += '<div class="page-layout-item fixed' + (isBottomNavActive ? ' active' : '') + '" data-nav-type="bottom">' +
+          '<div class="item-name">底部导航</div>' +
+        '</div>';
+
+        layoutList.innerHTML = html;
+
+        // 绑定点击事件 - 选中组件（含固定楼层）
+        layoutList.querySelectorAll('.page-layout-item[data-floor-id]').forEach(function (item) {
+          item.addEventListener('click', function (e) {
+            const floorId = this.dataset.floorId;
+            if (floorId) {
+              selectedFloorId = floorId;
+              renderCanvas();
+              renderComponentPropsPanel();
+              renderCanvasSideActions();
+              renderPageLayoutSideActions();
+            }
+          });
+        });
+
+        // 绑定顶部导航点击事件
+        layoutList.querySelectorAll('.page-layout-item[data-nav-type="top"]').forEach(function (item) {
+          item.addEventListener('click', function (e) {
+            selectedFloorId = '__top_nav__';
+            renderCanvas();
+            renderComponentPropsPanel();
+            renderCanvasSideActions();
+            renderPageLayoutSideActions();
+          });
+        });
+
+        // 绑定底部导航点击事件
+        layoutList.querySelectorAll('.page-layout-item[data-nav-type="bottom"]').forEach(function (item) {
+          item.addEventListener('click', function (e) {
+            selectedFloorId = '__bottom_nav__';
+            renderCanvas();
+            renderComponentPropsPanel();
+            renderCanvasSideActions();
+            renderPageLayoutSideActions();
+          });
+        });
+
+        // 更新左侧操作按钮
+        renderPageLayoutSideActions();
+      }
+
+      /**
+       * 更新页面布局左侧操作按钮状态
+       */
+      function renderPageLayoutSideActions() {
+        if (!pageLayoutSideActions) return;
+        const currentFloor = getCurrentFloor();
+
+        // 如果选中的是顶部/底部导航或没有选中组件，禁用所有按钮
+        if (!currentFloor || selectedFloorId === '__top_nav__' || selectedFloorId === '__bottom_nav__') {
+          if (btnLayoutUp) btnLayoutUp.disabled = true;
+          if (btnLayoutDown) btnLayoutDown.disabled = true;
+          if (btnLayoutCopy) btnLayoutCopy.disabled = true;
+          if (btnLayoutDelete) btnLayoutDelete.disabled = true;
+          return;
+        }
+
+        if (currentFloor.fixed) {
+          if (btnLayoutUp) btnLayoutUp.disabled = true;
+          if (btnLayoutDown) btnLayoutDown.disabled = true;
+          if (btnLayoutCopy) btnLayoutCopy.disabled = true;
+          if (btnLayoutDelete) btnLayoutDelete.disabled = true;
+          return;
+        }
+
+        // 更新按钮状态
+        const currentPage = getCurrentPage();
+        const floors = currentPage ? (currentPage.floors || []) : [];
+        const index = floors.findIndex(function (floor) { return floor.id === currentFloor.id; });
+
+        if (btnLayoutUp) btnLayoutUp.disabled = index <= 0;
+        if (btnLayoutDown) btnLayoutDown.disabled = index === -1 || index >= floors.length - 1;
+        if (btnLayoutCopy) btnLayoutCopy.disabled = false;
+        if (btnLayoutDelete) btnLayoutDelete.disabled = false;
+      }
+
+      /**
+       * 获取楼层类型名称（从组件库获取，保持一致）
+       */
+      function getFloorTypeName(type) {
+        const component = components.find(function (c) { return c.type === type; });
+        if (component) return component.name;
+        // 兜底的类型名称
+        const typeNames = {
+          'banner': 'Banner轮播',
+          'carousel': '轮播图',
+          'icon-nav': '图文导航',
+          'float-button': '悬浮组件',
+          'elevator-nav': '电梯导航',
+          'personal-recommend': '个性化推荐',
+          'custom-component': '自定义组件',
+          'category-entry': '分类入口',
+          'goods-list': '商品列表',
+          'goods-grid': '商品网格',
+          'goods-group': '商品分组',
+          'search-bar': '搜索框',
+          'rich-text': '富文本',
+          'title': '标题',
+          'text': '文本',
+          'link': '关联链接',
+          'big-bg-image': '大背景图',
+          'marketing': '营销活动',
+          'category-showcase': '分类展示',
+          'mine-header': '用户信息区',
+          'mine-stats-bar': '资产栏',
+          'mine-nav-grid': '图文导航',
+          'mine-menu-list': '菜单导航',
+          'points-card': '积分卡片',
+        };
+        return typeNames[type] || type;
+      }
+
+      /**
+       * 获取楼层类型图标
+       */
+      function getFloorTypeIcon(type) {
+        const typeIcons = {
+          'banner': '🖼️',
+          'carousel': '🎠',
+          'icon-nav': '🧭',
+          'float-button': '🔘',
+          'elevator-nav': '🛗',
+          'personal-recommend': '🎁',
+          'custom-component': '🧩',
+          'category-entry': '📊',
+          'goods-list': '🛒',
+          'goods-grid': '📦',
+          'goods-group': '📑',
+          'search-bar': '🔍',
+          'rich-text': '📝',
+          'title': '📌',
+          'text': '📄',
+          'link': '🔗',
+          'big-bg-image': '🏞️',
+          'marketing': '🎯',
+          'category-showcase': '📑',
+          'mine-header': '👤',
+          'mine-stats-bar': '📊',
+          'mine-nav-grid': '🧭',
+          'mine-menu-list': '📋',
+          'points-card': '🎁'
+        };
+        return typeIcons[type] || '📄';
+      }
+
+      function renderCanvas() {
+        const currentPage = getCurrentPage();
+        const visiblePages = pageStore.filter(function (page) { return page.pageType === currentPageGroup; });
+        const hasPages = visiblePages.length > 0;
+        const hasCurrentPage = currentPageId && currentPage.id;
+
+        // 判断是否显示空状态提示
+        let showEmptyTip = false;
+        let emptyTitle = '';
+        let emptyDesc = '';
+        let showEmptyBtn = false;
+
+        if (!hasPages) {
+          // 页面列表为空
+          showEmptyTip = true;
+          if (currentPageGroup === 'main') {
+            emptyTitle = '暂无主页面';
+            emptyDesc = '请点击左侧「+ 新增主页面」按钮创建页面';
+          } else {
+            emptyTitle = '暂无子页面';
+            emptyDesc = '请点击左侧「+ 新增子页面」按钮创建页面';
+          }
+          showEmptyBtn = true;
+        } else if (!hasCurrentPage) {
+          // 有页面但未选中
+          showEmptyTip = true;
+          emptyTitle = currentPageGroup === 'main' ? '请选择主页面' : '请选择子页面';
+          emptyDesc = '点击左侧页面卡片进行编辑';
+          showEmptyBtn = false;
+        }
+
+        // 控制空状态提示显示
+        if (emptyTipEl) {
+          if (showEmptyTip) {
+            emptyTipEl.style.display = 'flex';
+            if (emptyTipTitle) emptyTipTitle.textContent = emptyTitle;
+            if (emptyTipDesc) emptyTipDesc.textContent = emptyDesc;
+            if (emptyTipBtn) {
+              emptyTipBtn.style.display = showEmptyBtn ? 'inline-flex' : 'none';
+              emptyTipBtn.textContent = currentPageGroup === 'main' ? '+ 新增主页面' : '+ 新增子页面';
+            }
+          } else {
+            emptyTipEl.style.display = 'none';
+          }
+        }
+
+        // 控制手机预览框架显示：只有选中页面时才显示
+        if (phoneShell) {
+          phoneShell.style.display = hasCurrentPage ? 'flex' : 'none';
+        }
+        if (canvasSideActions) {
+          canvasSideActions.style.display = (hasCurrentPage && getCurrentFloor()) ? 'flex' : 'none';
+        }
+
+        // 控制组件拖拽提示：只有选中页面且页面没有组件时才显示
+        if (placeholderEl) {
+          placeholderEl.style.display = (hasCurrentPage && !currentPage.floors.length) ? 'flex' : 'none';
+        }
+
+        // 如果没有选中页面，不渲染楼层列表
+        if (!hasCurrentPage) {
+          floorListEl.innerHTML = '';
+          renderPageLayoutPanel();
+          return;
+        }
+
+        const isCategoryShowcasePage =
+          (currentPage.id === 'page-category-1' ||
+            currentPage.id === 'page-category-2' ||
+            currentPage.id === 'page-category-3' ||
+            currentPage.id === 'page-category-4' ||
+            currentPage.id === 'page-category-5') &&
+          currentPage.floors.length === 1 &&
+          currentPage.floors[0].type === 'category-showcase';
+
+        dropZoneEl.classList.toggle('category-showcase-mode', isCategoryShowcasePage);
+        floorListEl.classList.toggle('category-showcase-mode', isCategoryShowcasePage);
+
+        if (propsPageTitleInput) {
+          propsPageTitleInput.value = currentPage.name;
+        }
+        if (editorPageTitle) {
+          editorPageTitle.textContent = '- ' + currentPage.name;
+        }
+        // 更新画布内的页面标题栏
+        if (canvasNavbarTitle) {
+          if (currentPage.showNavbarTitle === false) {
+            canvasNavbarTitle.textContent = '';
+            canvasNavbarTitle.style.display = 'none';
+          } else {
+            canvasNavbarTitle.textContent = currentPage.navbarTitle || currentPage.name || '未命名页面';
+            canvasNavbarTitle.style.display = '';
+          }
+        }
+        // 子页面时显示返回按钮
+        if (canvasNavbarBack) {
+          const isSubPage = currentPage.pageType === 'sub';
+          canvasNavbarBack.style.display = isSubPage ? 'flex' : 'none';
+        }
+        floorListEl.innerHTML = currentPage.floors.map(function (floor, index) {
+          if (floor.type === 'category-showcase') {
+            return `
+              <div class="canvas-floor-card category-showcase-card ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
+                <div class="canvas-floor-body">
+                  ${createFloorMarkup(floor)}
+                </div>
+              </div>
+            `;
+          }
+          if (floor.type === 'float-button') {
+            // 悬浮组件特殊渲染：作为绝对定位元素，不需要canvas-floor-body包裹
+            var fbConfig = floor.floatButtonConfig || {};
+            var position = fbConfig.position || 'right';
+            var bottomMargin = fbConfig.bottomMargin || 80;
+            var leftMargin = 12; // 默认边距
+            var styleAttr = position === 'left' ? 'left:' + leftMargin + 'px;right:auto;' : 'right:' + leftMargin + 'px;';
+            return `
+              <div class="canvas-floor-card float-button-card ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}" style="${styleAttr}bottom:${bottomMargin}px;">
+                ${createFloorMarkup(floor)}
+              </div>
+            `;
+          }
+          // 轮播图组件延伸模式需要 overflow:visible 让延伸层突破
+          if (floor.type === 'carousel' && floor.carouselConfig && floor.carouselConfig.slides) {
+            var hasExtendSlide = floor.carouselConfig.slides.some(function(s) {
+              if (!s.image || s.extendHeight <= 0) return false;
+              // copy模式只需要主图片，stretch模式需要extendImage
+              if (s.extendMode === 'stretch') return s.extendImage;
+              return true;
+            });
+            if (hasExtendSlide) {
+              return `
+              <div class="canvas-floor-card carousel-extend-card ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
+                <div class="canvas-floor-body carousel-extend-body">
+                  ${createFloorMarkup(floor)}
+                </div>
+              </div>
+            `;
+            }
+          }
+          return `
+            <div class="canvas-floor-card ${floor.fixed ? 'floor-fixed' : ''} ${floor.id === selectedFloorId ? 'active' : ''}" data-floor-id="${floor.id}">
+              <div class="canvas-floor-body">
+                ${createFloorMarkup(floor)}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        floorListEl.querySelectorAll('.canvas-floor-card').forEach(function (card) {
+          card.addEventListener('click', function (event) {
+            selectedFloorId = this.dataset.floorId || '';
+            renderCanvas();
+            renderComponentPropsPanel();
+            renderCanvasSideActions();
+          });
+        });
+        bindCategoryBannerAutoplay();
+        bindCategoryBannerLinks();
+        bindGoodsListScrollPagination();
+        bindGoodsGroupTabEvents();
+        bindFloorSortEvents(floorListEl, '.canvas-floor-card');
+
+        // 渲染页面布局面板
+        renderPageLayoutPanel();
+      }
+
+      // 空状态提示按钮点击事件
+      if (emptyTipBtn) {
+        emptyTipBtn.addEventListener('click', function () {
+          if (btnAddPage) btnAddPage.click();
+        });
+      }
+
+      /**
+       * 编辑页内点击 Banner 链接触发时不跳转，避免离开画布。
+       */
+      function bindCategoryBannerLinks() {
+        floorListEl.querySelectorAll('.cat-banner-slide-link').forEach(function (anchorEl) {
+          anchorEl.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+          });
+        });
+      }
+
+      /**
+       * 绑定商品分组Tab点击事件
+       */
+      function bindGoodsGroupTabEvents() {
+        floorListEl.querySelectorAll('.gg-menu-item').forEach(function (tabEl) {
+          tabEl.addEventListener('click', function (event) {
+            event.stopPropagation();
+            const groupId = this.dataset.groupId;
+            const floorId = this.dataset.floorId;
+            if (!groupId || !floorId) return;
+
+            // 找到对应的floor并更新activeGroupId
+            const currentPage = getCurrentPage();
+            const floor = currentPage.floors.find(f => f.id === floorId);
+            if (floor && floor.goodsGroupConfig) {
+              floor.goodsGroupConfig.activeGroupId = groupId;
+              renderCanvas();
+            }
+          });
+        });
+      }
+
+      /**
+       * 绑定商品列表滚动分页事件
+       */
+      function bindGoodsListScrollPagination() {
+        var goodsListContainer = document.getElementById('goods-list-container');
+        if (!goodsListContainer) return;
+
+        // 获取画布滚动容器
+        var scrollContainer = floorListEl;
+
+        // 滚动事件处理
+        function handleScroll() {
+          if (goodsPaginationState.loading || !goodsPaginationState.hasMore) return;
+
+          var loadMoreEl = document.getElementById('goods-load-more');
+          if (!loadMoreEl) return;
+
+          // 检测是否滚动到加载更多元素附近
+          var loadMoreRect = loadMoreEl.getBoundingClientRect();
+          var containerRect = scrollContainer.getBoundingClientRect();
+
+          // 当加载更多元素进入可视区域时，触发加载
+          if (loadMoreRect.top <= containerRect.bottom + 100) {
+            loadMoreGoodsData();
+          }
+        }
+
+        // 加载更多商品数据
+        function loadMoreGoodsData() {
+          if (goodsPaginationState.loading || !goodsPaginationState.hasMore) return;
+
+          goodsPaginationState.loading = true;
+          var loadMoreEl = document.getElementById('goods-load-more');
+          if (loadMoreEl) {
+            loadMoreEl.classList.add('loading');
+            loadMoreEl.querySelector('.load-more-text').textContent = '加载中...';
+          }
+
+          // 模拟异步加载延迟
+          setTimeout(function () {
+            var newPage = loadMoreGoods();
+            if (newPage) {
+              // 重新渲染商品列表
+              var currentPage = getCurrentPage();
+              var goodsFloor = currentPage.floors.find(function (f) { return f.type === 'goods-list'; });
+              if (goodsFloor) {
+                var newGoodsHtml = buildGoodsListCanvasMarkup(goodsFloor);
+                // 只更新商品列表容器内容
+                var newContainer = document.createElement('div');
+                newContainer.innerHTML = newGoodsHtml;
+                var newGoodsListEl = newContainer.firstElementChild;
+                if (newGoodsListEl && goodsListContainer.parentNode) {
+                  goodsListContainer.parentNode.replaceChild(newGoodsListEl, goodsListContainer);
+                }
+              }
+            }
+
+            goodsPaginationState.loading = false;
+          }, 300);
+        }
+
+        // 绑定滚动事件
+        scrollContainer.addEventListener('scroll', handleScroll);
+
+        // 初始化时检查一次
+        handleScroll();
+      }
+
+      /**
+       * 绑定分类页 Banner 自动轮播：多张且开启循环时，末尾追加首张克隆并无缝复位，避免最后一张切回首张时反向闪跳。
+       */
+      function bindCategoryBannerAutoplay() {
+        Object.keys(bannerAutoplayTimers).forEach(function (key) {
+          window.clearInterval(bannerAutoplayTimers[key]);
+          delete bannerAutoplayTimers[key];
+        });
+        floorListEl.querySelectorAll('[data-banner-floor-id]').forEach(function (bannerEl) {
+          const trackEl = bannerEl.querySelector('.cat-banner-track');
+          if (!trackEl) return;
+          const slideNodes = trackEl.querySelectorAll('.cat-banner-slide');
+          const dots = bannerEl.querySelectorAll('[data-dot-index]');
+          const panelCount = slideNodes.length;
+          const floorId = bannerEl.dataset.bannerFloorId || '';
+          const seamless = bannerEl.dataset.bannerSeamless === '1';
+          const realCount = Math.max(1, Number(bannerEl.dataset.bannerRealCount) || panelCount);
+          const intervalMs = Math.max(1000, Number(bannerEl.dataset.bannerInterval) || 5000);
+          const loopEnabled = bannerEl.dataset.bannerLoop !== '0';
+
+          if (panelCount <= 1) {
+            trackEl.style.transform = 'translateX(0%)';
+            trackEl.classList.remove('cat-banner-track--instant');
+            dots.forEach(function (dot, dotIndex) {
+              dot.classList.toggle('active', dotIndex === 0);
+            });
+            return;
+          }
+
+          /**
+           * 根据当前视觉索引更新指示点。
+           * @param {number} visualIndex 当前轨道偏移对应的页索引（无缝模式下含克隆页）
+           */
+          function updateDots(visualIndex) {
+            var dotIdx = visualIndex;
+            if (seamless && visualIndex === realCount) {
+              dotIdx = 0;
+            } else if (!seamless && loopEnabled) {
+              dotIdx = visualIndex % realCount;
+            }
+            dots.forEach(function (dot, dotIndex) {
+              dot.classList.toggle('active', dotIndex === dotIdx);
+            });
+          }
+
+          if (!seamless) {
+            var simpleIndex = 0;
+            bannerAutoplayTimers[floorId] = window.setInterval(function () {
+              trackEl.classList.remove('cat-banner-track--instant');
+              if (loopEnabled) {
+                simpleIndex = (simpleIndex + 1) % panelCount;
+              } else {
+                simpleIndex = Math.min(simpleIndex + 1, panelCount - 1);
+              }
+              trackEl.style.transform = 'translateX(-' + simpleIndex * 100 + '%)';
+              updateDots(simpleIndex);
+            }, intervalMs);
+            return;
+          }
+
+          var index = 0;
+          var pendingReset = null;
+
+          bannerAutoplayTimers[floorId] = window.setInterval(function () {
+            if (pendingReset) {
+              trackEl.removeEventListener('transitionend', pendingReset);
+              pendingReset = null;
+            }
+            var next = index + 1;
+            trackEl.classList.remove('cat-banner-track--instant');
+            trackEl.style.transform = 'translateX(-' + next * 100 + '%)';
+            updateDots(next);
+
+            if (next === realCount) {
+              index = realCount;
+              pendingReset = function (event) {
+                if (event.target !== trackEl) return;
+                if (event.propertyName !== 'transform') return;
+                trackEl.removeEventListener('transitionend', pendingReset);
+                pendingReset = null;
+                trackEl.classList.add('cat-banner-track--instant');
+                index = 0;
+                trackEl.style.transform = 'translateX(0%)';
+                void trackEl.offsetHeight;
+                requestAnimationFrame(function () {
+                  trackEl.classList.remove('cat-banner-track--instant');
+                });
+              };
+              trackEl.addEventListener('transitionend', pendingReset);
+            } else {
+              index = next;
+            }
+          }, intervalMs);
+        });
+      }
+
+      function renderPagesPanel() {
+        const visiblePages = pageStore.filter(function (page) { return page.pageType === currentPageGroup; });
+        sideTitle.textContent = currentPageGroup === 'main' ? '主页面列表' : '子页面列表';
+        sideDesc.textContent =
+          currentPageGroup === 'main'
+            ? '主页面可按需新增首页、分类页、商品页等。'
+            : '子页面可按需新增和删除。';
+        btnAddPage.style.display = 'inline-flex';
+        btnAddPage.textContent = currentPageGroup === 'main' ? '+ 新增主页面' : '+ 新增子页面';
+        sideList.innerHTML = visiblePages.map(function (page) {
+          // 获取页面类型名称
+          var pageCategoryName = '';
+          if (page.pageCategory && PAGE_TYPE_CONFIG[page.pageCategory]) {
+            pageCategoryName = PAGE_TYPE_CONFIG[page.pageCategory].name || '';
+          }
+          // 根据页面类型设置badge样式
+          var badgeClass = 'page-card-badge';
+          if (page.pageCategory === 'home') {
+            badgeClass += ' badge-home';
+          } else if (page.pageCategory === 'category') {
+            badgeClass += ' badge-category';
+          } else if (page.pageCategory === 'mine') {
+            badgeClass += ' badge-mine';
+          } else if (page.pageCategory === 'product') {
+            badgeClass += ' badge-product';
+          } else if (page.pageCategory === 'cart') {
+            badgeClass += ' badge-cart';
+          } else if (!page.isDefault) {
+            badgeClass += ' custom';
+          }
+          return `
+            <div class="editor-list-item editor-page-item editor-page-card ${page.id === currentPageId ? 'active' : ''}" data-page-id="${page.id}">
+              <div class="page-card-preview">
+                <span class="${badgeClass}">${pageCategoryName || (page.isDefault ? '默认页面' : '自定义页面')}</span>
+                ${page.isDefault ? '' : '<button type="button" class="btn btn-danger btn-sm page-delete-btn page-card-delete" data-page-delete-id="' + page.id + '">删除</button>'}
+                <div class="page-preview-shell">
+                  <div class="page-preview-topbar">
+                    <div class="page-preview-search"></div>
+                  </div>
+                  <div class="page-preview-body">
+                    ${getPagePreviewMarkup(page)}
+                  </div>
+                  ${page.floors.filter(function(f) { return f.type === 'float-button'; }).map(function(fb) {
+                    var fbConfig = fb.floatButtonConfig || {};
+                    var buttons = fbConfig.buttons || [];
+                    // 显示第一个按钮的预览
+                    if (buttons.length > 0) {
+                      return '<div class="back-top-preview"></div>';
+                    }
+                    return '';
+                  }).join('')}
+                </div>
+              </div>
+              <div class="page-card-content">
+                <div class="page-card-title">${page.name}</div>
+                <div class="page-card-desc">${page.desc || ''}</div>
+              </div>
+            </div>
+          `;
+        }).join('') || '<div class="editor-list-item"><div class="editor-list-item-meta">当前分类下暂无页面，可点击右上角新增页面。</div></div>';
+
+        sideList.querySelectorAll('.editor-page-item').forEach(function (item) {
+          item.addEventListener('click', function (event) {
+            if (event && event.target && event.target.closest('.page-delete-btn')) return;
+            // 切换页面时重置商品分页状态
+            resetGoodsPagination();
+            currentPageId = this.dataset.pageId || currentPageId;
+            selectedFloorId = '';
+            renderSidePanel();
+            renderCanvas();
+            renderComponentPropsPanel();
+          });
+        });
+
+        sideList.querySelectorAll('[data-page-delete-id]').forEach(function (btn) {
+          btn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            const pageId = this.dataset.pageDeleteId || '';
+            const pageIndex = pageStore.findIndex(function (page) { return page.id === pageId; });
+            if (pageIndex === -1 || pageStore[pageIndex].isDefault) return;
+            pageStore.splice(pageIndex, 1);
+            if (currentPageId === pageId) {
+              const nextPages = pageStore.filter(function (page) { return page.pageType === currentPageGroup; });
+              currentPageId = (nextPages[0] && nextPages[0].id) || (pageStore[0] && pageStore[0].id) || '';
+              selectedFloorId = '';
+            }
+            normalizeTabTargets();
+            renderPagesPanel();
+            renderCanvas();
+            renderComponentPropsPanel();
+            renderTabbar();
+            renderTabConfigPanel();
+          });
+        });
+      }
+
+      // 属性面板中的页面标题输入框事件监听
+      if (propsPageTitleInput) {
+        propsPageTitleInput.addEventListener('input', function () {
+          const currentPage = getCurrentPage();
+          const newName = this.value.trim(); // 允许为空
+          currentPage.name = newName;
+          // 同步更新页面列表中的输入框
+          const sideInput = sideList.querySelector('[data-page-name-id="' + currentPage.id + '"]');
+          if (sideInput) {
+            sideInput.value = newName;
+          }
+          // 更新Tab配置面板
+          renderTabConfigPanel();
+        });
+      }
+
+      function renderComponentsPanel() {
+        sideTitle.textContent = '组件库';
+        sideDesc.textContent = '点击左侧”组件”后展示组件库，所有组件均可拖拽到中间页面。';
+        btnAddPage.style.display = 'none';
+
+        if (components.length === 0) {
+          sideList.innerHTML = '<div class=”empty-state” style=”padding: 24px; text-align: center; color: #94a3b8;”>暂无组件，请添加组件后使用。</div>';
+          return;
+        }
+
+        // 判断当前页面是否为”我的”页面，限制可用组件类型
+        var cp = getCurrentPage();
+        var isMinePage = cp && cp.pageCategory === 'mine';
+
+        var filteredComponents = components.filter(function(c) {
+          if (c.type === 'title' || c.type === 'link' || c.type === 'big-bg-image') return false;
+          if (isMinePage) {
+            return c.type === 'mine-nav-grid' || c.type === 'mine-menu-list';
+          }
+          // 非我的页面隐藏我的页面专属组件
+          if (c.category === '我的页面') return false;
+          return true;
+        });
+
+        if (isMinePage) {
+          sideDesc.textContent = '我的页面仅支持图文导航和菜单导航组件，可拖拽到中间页面。';
+        }
+
+        sideList.innerHTML = filteredComponents.map(function (component) {
+          return `
+            <div class="component-item" draggable="true" data-component-type="${component.type}">
+              <strong>${component.name}</strong>
+              <span>${component.desc}</span>
+            </div>
+          `;
+        }).join('');
+
+        sideList.querySelectorAll('.component-item').forEach(function (item) {
+          item.addEventListener('dragstart', function (event) {
+            if (event.dataTransfer) {
+              event.dataTransfer.setData('text/plain', this.dataset.componentType || '');
+              event.dataTransfer.setData('application/x-editor-drag-kind', 'component');
+            }
+          });
+        });
+      }
+
+      function renderSidePanel() {
+        if (currentPanel === 'pages') {
+          renderPagesPanel();
+          return;
+        }
+        renderComponentsPanel();
+      }
+
+      dropZoneEl.addEventListener('dragover', function (event) {
+        event.preventDefault();
+        dropZoneEl.classList.add('drag-hover');
+      });
+
+      dropZoneEl.addEventListener('dragleave', function () {
+        dropZoneEl.classList.remove('drag-hover');
+      });
+
+      dropZoneEl.addEventListener('drop', function (event) {
+        event.preventDefault();
+        dropZoneEl.classList.remove('drag-hover');
+        const dragKind = event.dataTransfer.getData('application/x-editor-drag-kind');
+        const type = event.dataTransfer.getData('text/plain');
+        if (dragKind === 'floor') {
+          if (draggingFloorId) {
+            moveFloorToEnd();
+            clearFloorDropStates();
+            syncFloorViews();
+          }
+          return;
+        }
+        if (!type || dragKind !== 'component') return;
+        if (!components.some(function (component) { return component.type === type; })) return;
+        const component = getComponentByType(type);
+        const currentPage = getCurrentPage();
+        // 我的页面仅允许添加图文导航和菜单导航
+        if (currentPage.pageCategory === 'mine' && type !== 'mine-nav-grid' && type !== 'mine-menu-list') return;
+        const newFloor = {
+          id: 'floor-' + Date.now(),
+          type: component.type,
+          name: component.name,
+          desc: component.previewLabel,
+        };
+        // 根据组件类型添加对应的config
+        if (component.defaultConfig) {
+          if (type === 'carousel') {
+            newFloor.carouselConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'goods-list') {
+            newFloor.goodsListConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'goods-group') {
+            newFloor.goodsGroupConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'search-bar') {
+            newFloor.searchBarConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'rich-text') {
+            newFloor.richTextConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'title') {
+            newFloor.titleConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'text') {
+            newFloor.textConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'link') {
+            newFloor.linkConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'big-bg-image') {
+            newFloor.bigBgImageConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'carousel') {
+            newFloor.carouselConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'icon-nav') {
+            newFloor.iconNavConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'float-button') {
+            newFloor.floatButtonConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'elevator-nav') {
+            newFloor.elevatorNavConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'personal-recommend') {
+            newFloor.personalRecommendConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'custom-component') {
+            newFloor.customComponentConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'mine-nav-grid') {
+            newFloor.mineNavGridConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          } else if (type === 'mine-menu-list') {
+            newFloor.mineMenuListConfig = JSON.parse(JSON.stringify(component.defaultConfig));
+          }
+        }
+        currentPage.floors.push(newFloor);
+        selectedFloorId = newFloor.id;
+        syncFloorViews();
+      });
+
+      // 返回按钮点击事件
+      if (btnBackToList) {
+        btnBackToList.addEventListener('click', function () {
+          // 如果有 opener 窗口，关闭当前窗口
+          if (window.opener) {
+            window.close();
+          } else {
+            // 否则跳转到主页面
+            window.location.href = 'index.html';
+          }
+        });
+      }
+
+      // 画布内子页面返回按钮点击事件
+      if (canvasNavbarBack) {
+        canvasNavbarBack.addEventListener('click', function () {
+          // 切换到主页面组
+          if (currentPageGroup === 'sub') {
+            // 切换到主页面 Tab
+            document.querySelectorAll('.editor-side-tab[data-panel="pages"]').forEach(function (tab) {
+              if (tab.dataset.pageGroup === 'main') {
+                tab.classList.add('active');
+              } else {
+                tab.classList.remove('active');
+              }
+            });
+            currentPageGroup = 'main';
+            const mainPages = pageStore.filter(function (page) { return page.pageType === 'main'; });
+            if (mainPages.length) {
+              currentPageId = mainPages[0].id;
+            }
+            selectedFloorId = '';
+            renderSidePanel();
+            renderCanvas();
+            renderComponentPropsPanel();
+            renderTabbar();
+            renderTabConfigPanel();
+          }
+        });
+      }
+
+      if (btnAddPage) {
+        btnAddPage.addEventListener('click', function () {
+          // 主页面使用两步选择弹窗
+          if (currentPageGroup === 'main') {
+            openAddPageModal();
+          } else {
+            // 子页面保持原有逻辑
+            const nextIndex =
+              pageStore.filter(function (page) { return page.pageType === 'sub'; }).length + 1;
+            const newPage = {
+              id: 'page-' + Date.now(),
+              name: '子页面' + nextIndex,
+              desc: '自定义子页面',
+              isDefault: false,
+              pageType: 'sub',
+              floors: [],
+            };
+            pageStore.push(newPage);
+            currentPageId = newPage.id;
+            selectedFloorId = '';
+            renderPagesPanel();
+            renderCanvas();
+            renderComponentPropsPanel();
+            renderTabConfigPanel();
+          }
+        });
+      }
+
+      // ===== 新增页面弹窗逻辑 =====
+      let addPageModalState = {
+        selectedType: 'home',
+        selectedTemplate: null
+      };
+
+      // 获取已存在的主页面类型
+      function getExistingMainPageTypes() {
+        return pageStore.filter(function(p) {
+          return p.pageCategory;
+        }).map(function(p) {
+          return p.pageCategory;
+        });
+      }
+
+      function openAddPageModal() {
+        // 默认选择首页
+        addPageModalState = { selectedType: 'home', selectedTemplate: null };
+        renderAddPageStep1();
+        document.getElementById('modal-add-page').classList.add('show');
+        // 默认选中首页类型，并显示其模板
+        setTimeout(function() {
+          renderAddPageTemplates('home');
+        }, 0);
+      }
+
+      function closeAddPageModal() {
+        document.getElementById('modal-add-page').classList.remove('show');
+      }
+
+      // ===== 商品数据来源弹窗逻辑 =====
+      function openGoodsSourceModal(floorId, groupId) {
+        // 获取当前分组的配置
+        const currentPage = getCurrentPage();
+        const floor = currentPage.floors.find(f => f.id === floorId);
+        const group = floor?.goodsGroupConfig?.groups?.find(g => g.id === groupId);
+
+        goodsSourceModalState = {
+          floorId: floorId,
+          groupId: groupId,
+          sourceType: group?.dataSourceType || 'brand',
+          selectedItems: group?.selectedItems || [],
+          sortType: group?.sortType || 'comprehensive',
+          // API对接模式
+          apiUrl: group?.apiUrl || '',
+          // 单品模式搜索和分页
+          productSearchKeyword: '',
+          productCurrentPage: 1,
+          productPageSize: 16
+        };
+
+        renderGoodsSourceModal();
+        document.getElementById('modal-goods-source').classList.add('show');
+      }
+
+      function closeGoodsSourceModal() {
+        document.getElementById('modal-goods-source').classList.remove('show');
+      }
+
+      function renderGoodsSourceModal() {
+        const sourceType = goodsSourceModalState.sourceType;
+        const isProductMode = sourceType === 'product';
+        const isApiMode = sourceType === 'api';
+
+        // 切换单品模式/API模式样式
+        const configEl = document.getElementById('goods-source-config');
+        configEl.classList.toggle('product-mode', isProductMode);
+        configEl.classList.toggle('api-mode', isApiMode);
+
+        // 渲染来源类型Tab
+        document.querySelectorAll('#goods-source-tabs .source-type-tab').forEach(function (tab) {
+          tab.classList.toggle('active', tab.dataset.type === sourceType);
+        });
+
+        // 更新列表标题
+        const listTitle = document.getElementById('goods-source-list-title');
+        const titleMap = {
+          'brand': '选择品牌',
+          'tag': '选择标签',
+          'category': '选择分类',
+          'product': '选择商品（点击多选）',
+          'api': 'API配置'
+        };
+        listTitle.textContent = titleMap[sourceType] || '选择数据来源';
+
+        // API模式显示API输入区域
+        const apiConfigEl = document.getElementById('goods-api-config');
+        if (apiConfigEl) {
+          apiConfigEl.style.display = isApiMode ? 'block' : 'none';
+          if (isApiMode && goodsSourceModalState.apiUrl) {
+            const apiInput = document.getElementById('goods-api-url');
+            if (apiInput) apiInput.value = goodsSourceModalState.apiUrl;
+          }
+        }
+
+        // 单品模式/API模式隐藏排序区域
+        const sortSection = document.getElementById('goods-source-sort-section');
+        if (sortSection) {
+          sortSection.style.display = (isProductMode || isApiMode) ? 'none' : 'block';
+        }
+
+        // API模式隐藏品牌/标签/分类列表区域
+        const sourceListSection = document.getElementById('goods-source-list-section');
+        if (sourceListSection) {
+          sourceListSection.style.display = isApiMode ? 'none' : 'flex';
+        }
+
+        // 单品模式显示搜索框和分页
+        const searchBox = document.getElementById('goods-product-search');
+        const paginationBox = document.getElementById('goods-product-pagination');
+        if (searchBox) {
+          searchBox.style.display = isProductMode ? 'flex' : 'none';
+        }
+        if (paginationBox) {
+          paginationBox.style.display = isProductMode ? 'flex' : 'none';
+        }
+
+        // 清空搜索框内容（非单品模式）
+        if (!isProductMode && !isApiMode) {
+          const searchInput = document.getElementById('goods-product-search-input');
+          if (searchInput) searchInput.value = '';
+        }
+
+        // 渲染来源列表（非API模式）
+        if (!isApiMode) {
+          renderGoodsSourceList();
+        }
+
+        // 设置排序方式
+        const sortSelect = document.getElementById('goods-source-sort');
+        sortSelect.value = goodsSourceModalState.sortType;
+
+        // 渲染商品预览（非单品模式、非API模式）
+        if (!isProductMode && !isApiMode) {
+          renderGoodsPreview();
+        }
+      }
+
+      function renderGoodsSourceList() {
+        const container = document.getElementById('goods-source-list');
+        const sourceType = goodsSourceModalState.sourceType;
+        const isProductMode = sourceType === 'product';
+        const isTreeMode = sourceType === 'tag' || sourceType === 'category';
+
+        // 根据来源类型获取数据
+        let items = [];
+        if (sourceType === 'brand') {
+          items = MOCK_BRANDS;
+        } else if (sourceType === 'tag') {
+          items = MOCK_TAGS;
+        } else if (sourceType === 'category') {
+          items = MOCK_CATEGORIES;
+        } else if (isProductMode) {
+          // 单品模式：全部商品
+          items = MOCK_GOODS_DATA;
+        }
+
+        // 单品模式：搜索过滤和分页
+        let totalPages = 1;
+        let totalCount = items.length;
+        if (isProductMode) {
+          const keyword = goodsSourceModalState.productSearchKeyword.trim().toLowerCase();
+          if (keyword) {
+            items = items.filter(function(item) {
+              return item.name.toLowerCase().indexOf(keyword) !== -1;
+            });
+          }
+          totalCount = items.length;
+          totalPages = Math.ceil(totalCount / goodsSourceModalState.productPageSize);
+
+          // 分页
+          const startIdx = (goodsSourceModalState.productCurrentPage - 1) * goodsSourceModalState.productPageSize;
+          const endIdx = startIdx + goodsSourceModalState.productPageSize;
+          items = items.slice(startIdx, endIdx);
+        }
+
+        if (isProductMode) {
+          // 单品模式：网格卡片样式
+          container.innerHTML = items.map(function (item) {
+            const isSelected = goodsSourceModalState.selectedItems.indexOf(item.id) !== -1;
+            return '<div class="goods-select-card ' + (isSelected ? 'selected' : '') + '" data-id="' + item.id + '">' +
+              '<div class="card-img">' +
+                '<div class="card-check"></div>' +
+              '</div>' +
+              '<div class="card-info">' +
+                '<div class="card-name">' + item.name + '</div>' +
+                '<div class="card-price">' + item.price + '</div>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+        } else if (isTreeMode) {
+          // 标签/分类模式：树形结构
+          container.innerHTML = renderTreeHTML(items, sourceType, goodsSourceModalState.selectedItems);
+          // 绑定树形节点事件
+          container.querySelectorAll('.tree-node-header').forEach(function(header) {
+            header.addEventListener('click', function(e) {
+              // 点击复选框：选中/取消
+              if (e.target.closest('.tree-node-checkbox') && this.dataset.id) {
+                e.stopPropagation();
+                const id = this.dataset.id;
+                const idx = goodsSourceModalState.selectedItems.indexOf(id);
+                if (idx === -1) {
+                  goodsSourceModalState.selectedItems.push(id);
+                } else {
+                  goodsSourceModalState.selectedItems.splice(idx, 1);
+                }
+                renderGoodsSourceList();
+                renderGoodsPreview();
+                return;
+              }
+              // 点击其他区域：展开/折叠
+              const treeNode = this.parentElement;
+              const toggle = this.querySelector('.tree-toggle');
+              const children = treeNode.querySelector(':scope > .tree-children');
+              if (children) {
+                const isExpanded = children.classList.contains('expanded');
+                children.classList.toggle('expanded', !isExpanded);
+                toggle.classList.toggle('expanded', !isExpanded);
+              }
+            });
+          });
+          // 绑定叶子节点选择事件
+          container.querySelectorAll('.tree-leaf-node').forEach(function(leaf) {
+            leaf.addEventListener('click', function() {
+              const id = this.dataset.id;
+              const idx = goodsSourceModalState.selectedItems.indexOf(id);
+              if (idx === -1) {
+                goodsSourceModalState.selectedItems.push(id);
+              } else {
+                goodsSourceModalState.selectedItems.splice(idx, 1);
+              }
+              renderGoodsSourceList();
+              renderGoodsPreview();
+            });
+          });
+        } else {
+          // 品牌模式：列表样式
+          container.innerHTML = items.map(function (item) {
+            const isSelected = goodsSourceModalState.selectedItems.indexOf(item.id) !== -1;
+            const countText = item.goodsCount + '件';
+            return '<div class="goods-source-item ' + (isSelected ? 'selected' : '') + '" data-id="' + item.id + '">' +
+              '<div class="item-checkbox"></div>' +
+              '<span class="item-name">' + item.name + '</span>' +
+              '<span class="item-count">' + countText + '</span>' +
+            '</div>';
+          }).join('');
+        }
+
+        // 绑定点击事件（非树形模式）
+        if (!isTreeMode) {
+          container.querySelectorAll(isProductMode ? '.goods-select-card' : '.goods-source-item').forEach(function (item) {
+            item.addEventListener('click', function () {
+              const id = this.dataset.id;
+              const idx = goodsSourceModalState.selectedItems.indexOf(id);
+              if (idx === -1) {
+                goodsSourceModalState.selectedItems.push(id);
+              } else {
+                goodsSourceModalState.selectedItems.splice(idx, 1);
+              }
+              renderGoodsSourceList();
+              if (!isProductMode) {
+                renderGoodsPreview();
+              }
+            });
+          });
+        }
+
+        // 更新已选数量显示
+        const selectedCountEl = document.getElementById('goods-selected-count');
+        const footerInfoEl = document.getElementById('goods-select-footer-info');
+        if (selectedCountEl) {
+          selectedCountEl.textContent = goodsSourceModalState.selectedItems.length;
+        }
+        if (footerInfoEl) {
+          footerInfoEl.style.display = isProductMode ? 'block' : 'none';
+        }
+
+        // 更新分页信息
+        if (isProductMode) {
+          const paginationInfo = document.getElementById('goods-pagination-info');
+          const prevBtn = document.getElementById('goods-pagination-prev');
+          const nextBtn = document.getElementById('goods-pagination-next');
+
+          if (paginationInfo) {
+            paginationInfo.textContent = '共 ' + totalCount + ' 件，第 ' + goodsSourceModalState.productCurrentPage + '/' + totalPages + ' 页';
+          }
+          if (prevBtn) {
+            prevBtn.disabled = goodsSourceModalState.productCurrentPage <= 1;
+          }
+          if (nextBtn) {
+            nextBtn.disabled = goodsSourceModalState.productCurrentPage >= totalPages;
+          }
+        }
+      }
+
+      // 通用树形结构HTML生成函数
+      function renderTreeHTML(nodes, sourceType) {
+        var selectedItems = arguments[2] || [];
+        var isCategoryMode = sourceType === 'category';
+        var html = '';
+        nodes.forEach(function(node) {
+          if (node.isGroup && node.children && node.children.length > 0) {
+            var totalGoodsCount = 0;
+            node.children.forEach(function(child) {
+              if (child.isGroup && child.children) {
+                child.children.forEach(function(leaf) { totalGoodsCount += (leaf.goodsCount || 0); });
+              } else {
+                totalGoodsCount += (child.goodsCount || 0);
+              }
+            });
+            var isSelected = isCategoryMode && selectedItems.indexOf(node.id) !== -1;
+            html += '<div class="tree-node">';
+            html += '<div class="tree-node-header' + (isSelected ? ' selected' : '') + '" data-id="' + node.id + '">';
+            html += '<span class="tree-toggle">▶</span>';
+            if (isCategoryMode) {
+              html += '<div class="item-checkbox tree-node-checkbox"></div>';
+            }
+            html += '<span class="tree-node-icon">' + (sourceType === 'tag' ? '🏷️' : '📁') + '</span>';
+            html += '<span class="tree-node-name">' + node.name + '</span>';
+            html += '<span class="tree-node-count">' + totalGoodsCount + '件</span>';
+            html += '</div>';
+            html += '<div class="tree-children">';
+            html += renderTreeChildrenHTML(node.children, sourceType, selectedItems);
+            html += '</div>';
+            html += '</div>';
+          }
+        });
+        return html;
+      }
+
+      function renderTreeChildrenHTML(children, sourceType, selectedItems) {
+        var isCategoryMode = sourceType === 'category';
+        var html = '';
+        children.forEach(function(child) {
+          if (child.isGroup && child.children && child.children.length > 0) {
+            // 中间层级（分类的第二级）
+            var totalGoodsCount = 0;
+            child.children.forEach(function(leaf) { totalGoodsCount += (leaf.goodsCount || 0); });
+            var isSelected = isCategoryMode && selectedItems.indexOf(child.id) !== -1;
+            html += '<div class="tree-node">';
+            html += '<div class="tree-node-header' + (isSelected ? ' selected' : '') + '" data-id="' + child.id + '">';
+            html += '<span class="tree-toggle">▶</span>';
+            if (isCategoryMode) {
+              html += '<div class="item-checkbox tree-node-checkbox"></div>';
+            }
+            html += '<span class="tree-node-icon">' + (sourceType === 'tag' ? '🏷️' : '📂') + '</span>';
+            html += '<span class="tree-node-name">' + child.name + '</span>';
+            html += '<span class="tree-node-count">' + totalGoodsCount + '件</span>';
+            html += '</div>';
+            html += '<div class="tree-children">';
+            html += renderTreeLeafHTML(child.children, selectedItems);
+            html += '</div>';
+            html += '</div>';
+          } else if (!child.isGroup) {
+            // 标签的叶子节点（标签值）
+            const isSelected = selectedItems.indexOf(child.id) !== -1;
+            html += '<div class="tree-leaf-node ' + (isSelected ? 'selected' : '') + '" data-id="' + child.id + '">';
+            html += '<div class="item-checkbox"></div>';
+            html += '<span class="item-name">' + child.name + '</span>';
+            html += '<span class="item-count">' + (child.goodsCount || 0) + '件</span>';
+            html += '</div>';
+          }
+        });
+        return html;
+      }
+
+      function renderTreeLeafHTML(leaves, selectedItems) {
+        var html = '';
+        leaves.forEach(function(leaf) {
+          const isSelected = selectedItems.indexOf(leaf.id) !== -1;
+          html += '<div class="tree-leaf-node ' + (isSelected ? 'selected' : '') + '" data-id="' + leaf.id + '">';
+          html += '<div class="item-checkbox"></div>';
+          html += '<span class="item-name">' + leaf.name + '</span>';
+          html += '<span class="item-count">' + (leaf.goodsCount || 0) + '件</span>';
+          html += '</div>';
+        });
+        return html;
+      }
+
+      // 渲染API模式商品列表
+      function renderApiProductsList(modalType) {
+        const containerId = modalType === 'goods' ? 'goods-api-products-list' : 'goods-list-api-products-list';
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        // 模拟API返回的商品数据（实际应从API获取）
+        // 这里使用MOCK_GOODS_DATA作为示例
+        const apiProducts = MOCK_GOODS_DATA.slice(0, 12);
+        const state = modalType === 'goods' ? goodsSourceModalState : goodsListSourceModalState;
+
+        container.innerHTML = apiProducts.map(function (product) {
+          const isSelected = state.selectedItems.indexOf(product.id) !== -1;
+          return '<div class="goods-select-card ' + (isSelected ? 'selected' : '') + '" data-id="' + product.id + '" data-modal="' + modalType + '">' +
+            '<div class="card-img">' +
+              (product.image ? '<img src="' + product.image + '" alt="' + product.name + '" style="width:100%;height:100%;object-fit:cover;" />' : '<div class="placeholder">商品</div>') +
+              '<div class="card-check"></div>' +
+            '</div>' +
+            '<div class="card-info">' +
+              '<div class="card-name">' + product.name + '</div>' +
+              '<div class="card-price">' + product.price + '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+        // 绑定点击事件
+        container.querySelectorAll('.goods-select-card').forEach(function (card) {
+          card.addEventListener('click', function () {
+            const id = this.dataset.id;
+            const modal = this.dataset.modal;
+            const currentState = modal === 'goods' ? goodsSourceModalState : goodsListSourceModalState;
+            const idx = currentState.selectedItems.indexOf(id);
+            if (idx === -1) {
+              currentState.selectedItems.push(id);
+            } else {
+              currentState.selectedItems.splice(idx, 1);
+            }
+            renderApiProductsList(modal);
+          });
+        });
+
+        // 更新已选数量显示
+        const countEl = document.getElementById(modalType === 'goods' ? 'goods-selected-count' : 'goods-list-selected-count');
+        if (countEl) {
+          countEl.textContent = state.selectedItems.length;
+        }
+      }
+
+      function renderGoodsPreview() {
+        const container = document.getElementById('goods-preview-list');
+        const countEl = document.getElementById('goods-preview-count');
+
+        // 根据选中的品牌/标签/分类和排序方式筛选商品
+        let filteredGoods = [];
+        if (goodsSourceModalState.selectedItems.length > 0) {
+          // 模拟根据选择筛选商品
+          filteredGoods = MOCK_GOODS_DATA.slice(0, 9);
+        } else {
+          filteredGoods = MOCK_GOODS_DATA.slice(0, 9);
+        }
+
+        // 根据排序方式排序
+        const sortType = goodsSourceModalState.sortType;
+        if (sortType === 'sales') {
+          filteredGoods.sort((a, b) => b.sales - a.sales);
+        } else if (sortType === 'price-asc') {
+          filteredGoods.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+        } else if (sortType === 'price-desc') {
+          filteredGoods.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+        } else if (sortType === 'comments') {
+          filteredGoods.sort((a, b) => b.comments - a.comments);
+        } else if (sortType === 'goodRate') {
+          filteredGoods.sort((a, b) => parseFloat(b.goodRate) - parseFloat(a.goodRate));
+        } else if (sortType === 'newest') {
+          filteredGoods.reverse();
+        }
+
+        countEl.innerHTML = '<strong>' + filteredGoods.length + '</strong> 件商品';
+
+        container.innerHTML = filteredGoods.map(function (goods) {
+          return '<div class="goods-preview-item">' +
+            '<div class="preview-img"></div>' +
+            '<div class="preview-info">' +
+              '<div class="preview-name" title="' + goods.name + '">' + goods.name + '</div>' +
+              '<div class="preview-meta">' +
+                '<span class="preview-sales">已售 ' + (goods.sales || Math.floor(Math.random() * 1000)) + '</span>' +
+              '</div>' +
+              '<div class="preview-price">' + goods.price + '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      function saveGoodsSourceConfig() {
+        const floor = getCurrentPage().floors.find(f => f.id === goodsSourceModalState.floorId);
+        if (!floor || !floor.goodsGroupConfig) return;
+
+        const group = floor.goodsGroupConfig.groups.find(g => g.id === goodsSourceModalState.groupId);
+        if (!group) return;
+
+        group.dataSourceType = goodsSourceModalState.sourceType;
+        group.selectedItems = goodsSourceModalState.selectedItems;
+        group.sortType = goodsSourceModalState.sortType;
+
+        // API模式保存API URL
+        if (goodsSourceModalState.sourceType === 'api') {
+          const apiInput = document.getElementById('goods-api-url');
+          group.apiUrl = apiInput ? apiInput.value : '';
+          group.dataSource = 'API对接';
+        } else if (goodsSourceModalState.selectedItems.length > 0) {
+          // 更新分组名称显示
+          let items = [];
+          if (goodsSourceModalState.sourceType === 'brand') {
+            items = MOCK_BRANDS;
+          } else if (goodsSourceModalState.sourceType === 'tag') {
+            items = flattenTreeNodes(MOCK_TAGS);
+          } else if (goodsSourceModalState.sourceType === 'category') {
+            items = flattenTreeNodes(MOCK_CATEGORIES);
+          } else if (goodsSourceModalState.sourceType === 'product') {
+            items = MOCK_GOODS_DATA.slice(0, 30).map(g => ({ id: g.id, name: g.name }));
+          }
+          const names = goodsSourceModalState.selectedItems.map(id => {
+            const item = items.find(i => i.id === id);
+            return item ? item.name : '';
+          }).filter(n => n);
+          if (names.length > 0) {
+            group.dataSource = goodsSourceModalState.sourceType;
+          }
+        }
+
+        closeGoodsSourceModal();
+        renderComponentPropsPanel();
+        renderCanvas();
+      }
+
+      // 绑定来源类型Tab点击
+      document.querySelectorAll('#goods-source-tabs .source-type-tab').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          goodsSourceModalState.sourceType = this.dataset.type;
+          goodsSourceModalState.selectedItems = [];
+          // 重置搜索和分页
+          goodsSourceModalState.productSearchKeyword = '';
+          goodsSourceModalState.productCurrentPage = 1;
+          const searchInput = document.getElementById('goods-product-search-input');
+          if (searchInput) searchInput.value = '';
+          renderGoodsSourceModal();
+        });
+      });
+
+      // 绑定排序方式变化
+      document.getElementById('goods-source-sort')?.addEventListener('change', function () {
+        goodsSourceModalState.sortType = this.value;
+        renderGoodsPreview();
+      });
+
+      // 绑定单品模式搜索
+      document.getElementById('goods-product-search-btn')?.addEventListener('click', function () {
+        const input = document.getElementById('goods-product-search-input');
+        goodsSourceModalState.productSearchKeyword = input ? input.value : '';
+        goodsSourceModalState.productCurrentPage = 1;
+        renderGoodsSourceList();
+      });
+      document.getElementById('goods-product-search-input')?.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          goodsSourceModalState.productSearchKeyword = this.value;
+          goodsSourceModalState.productCurrentPage = 1;
+          renderGoodsSourceList();
+        }
+      });
+
+      // 绑定单品模式分页
+      document.getElementById('goods-pagination-prev')?.addEventListener('click', function () {
+        if (goodsSourceModalState.productCurrentPage > 1) {
+          goodsSourceModalState.productCurrentPage--;
+          renderGoodsSourceList();
+        }
+      });
+      document.getElementById('goods-pagination-next')?.addEventListener('click', function () {
+        goodsSourceModalState.productCurrentPage++;
+        renderGoodsSourceList();
+      });
+
+      // 绑定API模式获取数据按钮
+      document.getElementById('goods-api-fetch-btn')?.addEventListener('click', function () {
+        const apiInput = document.getElementById('goods-api-url');
+        const apiUrl = apiInput ? apiInput.value.trim() : '';
+        if (apiUrl) {
+          goodsSourceModalState.apiUrl = apiUrl;
+          renderApiProductsList('goods');
+        } else {
+          alert('请输入API链接');
+        }
+      });
+
+      // 弹窗关闭事件
+      document.querySelectorAll('#modal-goods-source .modal-close, #modal-goods-source .modal-cancel').forEach(function (btn) {
+        btn.addEventListener('click', closeGoodsSourceModal);
+      });
+
+      document.getElementById('modal-goods-source')?.addEventListener('click', function (e) {
+        if (e.target === this) closeGoodsSourceModal();
+      });
+
+      document.getElementById('btn-goods-source-confirm')?.addEventListener('click', function () {
+        saveGoodsSourceConfig();
+      });
+
+      // ===== 商品列表数据来源弹窗逻辑 =====
+      function openGoodsListSourceModal(floorId) {
+        const currentPage = getCurrentPage();
+        const floor = currentPage.floors.find(f => f.id === floorId);
+
+        goodsListSourceModalState = {
+          floorId: floorId,
+          sourceType: floor?.goodsListConfig?.dataSourceType || 'brand',
+          selectedItems: floor?.goodsListConfig?.selectedItems || [],
+          sortType: floor?.goodsListConfig?.sortType || 'comprehensive',
+          // API对接模式
+          apiUrl: floor?.goodsListConfig?.apiUrl || '',
+          productSearchKeyword: '',
+          productCurrentPage: 1,
+          productPageSize: 16
+        };
+
+        renderGoodsListSourceModal();
+        document.getElementById('modal-goods-list-source').classList.add('show');
+      }
+
+      function closeGoodsListSourceModal() {
+        document.getElementById('modal-goods-list-source').classList.remove('show');
+      }
+
+      function renderGoodsListSourceModal() {
+        const sourceType = goodsListSourceModalState.sourceType;
+        const isProductMode = sourceType === 'product';
+        const isApiMode = sourceType === 'api';
+
+        // 切换单品模式/API模式样式
+        const configEl = document.getElementById('goods-list-source-config');
+        configEl.classList.toggle('product-mode', isProductMode);
+        configEl.classList.toggle('api-mode', isApiMode);
+
+        // 渲染来源类型Tab
+        document.querySelectorAll('#goods-list-source-tabs .source-type-tab').forEach(function (tab) {
+          tab.classList.toggle('active', tab.dataset.type === sourceType);
+        });
+
+        // 更新列表标题
+        const listTitle = document.getElementById('goods-list-source-list-title');
+        const titleMap = {
+          'brand': '选择品牌',
+          'tag': '选择标签',
+          'category': '选择分类',
+          'product': '选择商品（点击多选）',
+          'api': 'API配置'
+        };
+        listTitle.textContent = titleMap[sourceType] || '选择数据来源';
+
+        // API模式显示API输入区域
+        const apiConfigEl = document.getElementById('goods-list-api-config');
+        if (apiConfigEl) {
+          apiConfigEl.style.display = isApiMode ? 'block' : 'none';
+          if (isApiMode && goodsListSourceModalState.apiUrl) {
+            const apiInput = document.getElementById('goods-list-api-url');
+            if (apiInput) apiInput.value = goodsListSourceModalState.apiUrl;
+          }
+        }
+
+        // 单品模式/API模式隐藏排序区域
+        const sortSection = document.getElementById('goods-list-source-sort-section');
+        if (sortSection) {
+          sortSection.style.display = (isProductMode || isApiMode) ? 'none' : 'block';
+        }
+
+        // API模式隐藏品牌/标签/分类列表区域
+        const sourceListSection = document.getElementById('goods-list-source-list-section');
+        if (sourceListSection) {
+          sourceListSection.style.display = isApiMode ? 'none' : 'flex';
+        }
+
+        // 单品模式显示搜索框和分页
+        const searchBox = document.getElementById('goods-list-product-search');
+        const paginationBox = document.getElementById('goods-list-product-pagination');
+        if (searchBox) {
+          searchBox.style.display = isProductMode ? 'flex' : 'none';
+        }
+        if (paginationBox) {
+          paginationBox.style.display = isProductMode ? 'flex' : 'none';
+        }
+
+        // 清空搜索框内容（非单品模式、非API模式）
+        if (!isProductMode && !isApiMode) {
+          const searchInput = document.getElementById('goods-list-product-search-input');
+          if (searchInput) searchInput.value = '';
+        }
+
+        // 渲染来源列表（非API模式）
+        if (!isApiMode) {
+          renderGoodsListSourceList();
+        }
+
+        // 设置排序方式
+        const sortSelect = document.getElementById('goods-list-source-sort');
+        sortSelect.value = goodsListSourceModalState.sortType;
+
+        // 渲染商品预览（非单品模式、非API模式）
+        if (!isProductMode && !isApiMode) {
+          renderGoodsListPreview();
+        }
+      }
+
+      function renderGoodsListSourceList() {
+        const container = document.getElementById('goods-list-source-list');
+        const sourceType = goodsListSourceModalState.sourceType;
+        const isProductMode = sourceType === 'product';
+        const isTreeMode = sourceType === 'tag' || sourceType === 'category';
+
+        // 根据来源类型获取数据
+        let items = [];
+        if (sourceType === 'brand') {
+          items = MOCK_BRANDS;
+        } else if (sourceType === 'tag') {
+          items = MOCK_TAGS;
+        } else if (sourceType === 'category') {
+          items = MOCK_CATEGORIES;
+        } else if (isProductMode) {
+          items = MOCK_GOODS_DATA;
+        }
+
+        // 单品模式：搜索过滤和分页
+        let totalPages = 1;
+        let totalCount = items.length;
+        if (isProductMode) {
+          const keyword = goodsListSourceModalState.productSearchKeyword.trim().toLowerCase();
+          if (keyword) {
+            items = items.filter(function(item) {
+              return item.name.toLowerCase().indexOf(keyword) !== -1;
+            });
+          }
+          totalCount = items.length;
+          totalPages = Math.ceil(totalCount / goodsListSourceModalState.productPageSize);
+
+          const startIdx = (goodsListSourceModalState.productCurrentPage - 1) * goodsListSourceModalState.productPageSize;
+          const endIdx = startIdx + goodsListSourceModalState.productPageSize;
+          items = items.slice(startIdx, endIdx);
+        }
+
+        if (isProductMode) {
+          container.innerHTML = items.map(function (item) {
+            const isSelected = goodsListSourceModalState.selectedItems.indexOf(item.id) !== -1;
+            return '<div class="goods-select-card ' + (isSelected ? 'selected' : '') + '" data-id="' + item.id + '">' +
+              '<div class="card-img">' +
+                '<div class="card-check"></div>' +
+              '</div>' +
+              '<div class="card-info">' +
+                '<div class="card-name">' + item.name + '</div>' +
+                '<div class="card-price">' + item.price + '</div>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+        } else if (isTreeMode) {
+          // 标签/分类模式：树形结构
+          container.innerHTML = renderTreeHTML(items, sourceType, goodsListSourceModalState.selectedItems);
+          // 绑定树形节点事件
+          container.querySelectorAll('.tree-node-header').forEach(function(header) {
+            header.addEventListener('click', function(e) {
+              // 点击复选框：选中/取消
+              if (e.target.closest('.tree-node-checkbox') && this.dataset.id) {
+                e.stopPropagation();
+                const id = this.dataset.id;
+                const idx = goodsListSourceModalState.selectedItems.indexOf(id);
+                if (idx === -1) {
+                  goodsListSourceModalState.selectedItems.push(id);
+                } else {
+                  goodsListSourceModalState.selectedItems.splice(idx, 1);
+                }
+                renderGoodsListSourceList();
+                renderGoodsListPreview();
+                return;
+              }
+              // 点击其他区域：展开/折叠
+              const treeNode = this.parentElement;
+              const toggle = this.querySelector('.tree-toggle');
+              const children = treeNode.querySelector(':scope > .tree-children');
+              if (children) {
+                const isExpanded = children.classList.contains('expanded');
+                children.classList.toggle('expanded', !isExpanded);
+                toggle.classList.toggle('expanded', !isExpanded);
+              }
+            });
+          });
+          // 绑定叶子节点选择事件
+          container.querySelectorAll('.tree-leaf-node').forEach(function(leaf) {
+            leaf.addEventListener('click', function() {
+              const id = this.dataset.id;
+              const idx = goodsListSourceModalState.selectedItems.indexOf(id);
+              if (idx === -1) {
+                goodsListSourceModalState.selectedItems.push(id);
+              } else {
+                goodsListSourceModalState.selectedItems.splice(idx, 1);
+              }
+              renderGoodsListSourceList();
+              renderGoodsListPreview();
+            });
+          });
+        } else {
+          // 品牌模式：列表样式
+          container.innerHTML = items.map(function (item) {
+            const isSelected = goodsListSourceModalState.selectedItems.indexOf(item.id) !== -1;
+            const countText = item.goodsCount + '件';
+            return '<div class="goods-source-item ' + (isSelected ? 'selected' : '') + '" data-id="' + item.id + '">' +
+              '<div class="item-checkbox"></div>' +
+              '<span class="item-name">' + item.name + '</span>' +
+              '<span class="item-count">' + countText + '</span>' +
+            '</div>';
+          }).join('');
+        }
+
+        // 绑定点击事件（非树形模式）
+        if (!isTreeMode) {
+          container.querySelectorAll(isProductMode ? '.goods-select-card' : '.goods-source-item').forEach(function (item) {
+            item.addEventListener('click', function () {
+              const id = this.dataset.id;
+              const idx = goodsListSourceModalState.selectedItems.indexOf(id);
+              if (idx === -1) {
+                goodsListSourceModalState.selectedItems.push(id);
+              } else {
+                goodsListSourceModalState.selectedItems.splice(idx, 1);
+              }
+              renderGoodsListSourceList();
+              if (!isProductMode) {
+                renderGoodsListPreview();
+              }
+            });
+          });
+        }
+
+        // 更新已选数量显示
+        const selectedCountEl = document.getElementById('goods-list-selected-count');
+        const footerInfoEl = document.getElementById('goods-list-select-footer-info');
+        if (selectedCountEl) {
+          selectedCountEl.textContent = goodsListSourceModalState.selectedItems.length;
+        }
+        if (footerInfoEl) {
+          footerInfoEl.style.display = isProductMode ? 'block' : 'none';
+        }
+
+        // 更新分页信息
+        if (isProductMode) {
+          const paginationInfo = document.getElementById('goods-list-pagination-info');
+          const prevBtn = document.getElementById('goods-list-pagination-prev');
+          const nextBtn = document.getElementById('goods-list-pagination-next');
+
+          if (paginationInfo) {
+            paginationInfo.textContent = '共 ' + totalCount + ' 件，第 ' + goodsListSourceModalState.productCurrentPage + '/' + totalPages + ' 页';
+          }
+          if (prevBtn) {
+            prevBtn.disabled = goodsListSourceModalState.productCurrentPage <= 1;
+          }
+          if (nextBtn) {
+            nextBtn.disabled = goodsListSourceModalState.productCurrentPage >= totalPages;
+          }
+        }
+      }
+
+      function renderGoodsListPreview() {
+        const container = document.getElementById('goods-list-preview-list');
+        const countEl = document.getElementById('goods-list-preview-count');
+
+        let filteredGoods = [];
+        if (goodsListSourceModalState.selectedItems.length > 0) {
+          filteredGoods = MOCK_GOODS_DATA.slice(0, 9);
+        } else {
+          filteredGoods = MOCK_GOODS_DATA.slice(0, 9);
+        }
+
+        const sortType = goodsListSourceModalState.sortType;
+        if (sortType === 'sales') {
+          filteredGoods.sort((a, b) => b.sales - a.sales);
+        } else if (sortType === 'price-asc') {
+          filteredGoods.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+        } else if (sortType === 'price-desc') {
+          filteredGoods.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+        } else if (sortType === 'comments') {
+          filteredGoods.sort((a, b) => b.comments - a.comments);
+        } else if (sortType === 'goodRate') {
+          filteredGoods.sort((a, b) => parseFloat(b.goodRate) - parseFloat(a.goodRate));
+        } else if (sortType === 'newest') {
+          filteredGoods.reverse();
+        }
+
+        countEl.innerHTML = '<strong>' + filteredGoods.length + '</strong> 件商品';
+
+        container.innerHTML = filteredGoods.map(function (goods) {
+          return '<div class="goods-preview-item">' +
+            '<div class="preview-img"></div>' +
+            '<div class="preview-info">' +
+              '<div class="preview-name" title="' + goods.name + '">' + goods.name + '</div>' +
+              '<div class="preview-meta">' +
+                '<span class="preview-sales">已售 ' + (goods.sales || Math.floor(Math.random() * 1000)) + '</span>' +
+              '</div>' +
+              '<div class="preview-price">' + goods.price + '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      function saveGoodsListSourceConfig() {
+        const floor = getCurrentPage().floors.find(f => f.id === goodsListSourceModalState.floorId);
+        if (!floor || !floor.goodsListConfig) return;
+
+        floor.goodsListConfig.dataSourceType = goodsListSourceModalState.sourceType;
+        floor.goodsListConfig.selectedItems = goodsListSourceModalState.selectedItems;
+        floor.goodsListConfig.sortType = goodsListSourceModalState.sortType;
+
+        // API模式保存API URL
+        if (goodsListSourceModalState.sourceType === 'api') {
+          const apiInput = document.getElementById('goods-list-api-url');
+          floor.goodsListConfig.apiUrl = apiInput ? apiInput.value : '';
+        }
+
+        closeGoodsListSourceModal();
+        renderComponentPropsPanel();
+        renderCanvas();
+      }
+
+      // 绑定商品列表来源类型Tab点击
+      document.querySelectorAll('#goods-list-source-tabs .source-type-tab').forEach(function (tab) {
+        tab.addEventListener('click', function () {
+          goodsListSourceModalState.sourceType = this.dataset.type;
+          goodsListSourceModalState.selectedItems = [];
+          goodsListSourceModalState.productSearchKeyword = '';
+          goodsListSourceModalState.productCurrentPage = 1;
+          const searchInput = document.getElementById('goods-list-product-search-input');
+          if (searchInput) searchInput.value = '';
+          renderGoodsListSourceModal();
+        });
+      });
+
+      // 绑定商品列表排序方式变化
+      document.getElementById('goods-list-source-sort')?.addEventListener('change', function () {
+        goodsListSourceModalState.sortType = this.value;
+        renderGoodsListPreview();
+      });
+
+      // 绑定商品列表单品模式搜索
+      document.getElementById('goods-list-product-search-btn')?.addEventListener('click', function () {
+        const input = document.getElementById('goods-list-product-search-input');
+        goodsListSourceModalState.productSearchKeyword = input ? input.value : '';
+        goodsListSourceModalState.productCurrentPage = 1;
+        renderGoodsListSourceList();
+      });
+      document.getElementById('goods-list-product-search-input')?.addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') {
+          goodsListSourceModalState.productSearchKeyword = this.value;
+          goodsListSourceModalState.productCurrentPage = 1;
+          renderGoodsListSourceList();
+        }
+      });
+
+      // 绑定商品列表单品模式分页
+      document.getElementById('goods-list-pagination-prev')?.addEventListener('click', function () {
+        if (goodsListSourceModalState.productCurrentPage > 1) {
+          goodsListSourceModalState.productCurrentPage--;
+          renderGoodsListSourceList();
+        }
+      });
+      document.getElementById('goods-list-pagination-next')?.addEventListener('click', function () {
+        goodsListSourceModalState.productCurrentPage++;
+        renderGoodsListSourceList();
+      });
+
+      // 绑定API模式获取数据按钮
+      document.getElementById('goods-list-api-fetch-btn')?.addEventListener('click', function () {
+        const apiInput = document.getElementById('goods-list-api-url');
+        const apiUrl = apiInput ? apiInput.value.trim() : '';
+        if (apiUrl) {
+          goodsListSourceModalState.apiUrl = apiUrl;
+          renderApiProductsList('goods-list');
+        } else {
+          alert('请输入API链接');
+        }
+      });
+
+      // 商品列表弹窗关闭事件
+      document.querySelectorAll('#modal-goods-list-source .modal-close, #modal-goods-list-source .modal-cancel').forEach(function (btn) {
+        btn.addEventListener('click', closeGoodsListSourceModal);
+      });
+
+      document.getElementById('modal-goods-list-source')?.addEventListener('click', function (e) {
+        if (e.target === this) closeGoodsListSourceModal();
+      });
+
+      document.getElementById('btn-goods-list-source-confirm')?.addEventListener('click', function () {
+        saveGoodsListSourceConfig();
+      });
+
+      function renderAddPageStep1() {
+        const container = document.getElementById('page-type-list');
+        if (!container) return;
+
+        const existingTypes = getExistingMainPageTypes();
+        const types = Object.keys(PAGE_TYPE_CONFIG);
+        container.innerHTML = types.map(function (typeKey) {
+          const config = PAGE_TYPE_CONFIG[typeKey];
+          const isExisting = existingTypes.indexOf(typeKey) !== -1;
+          const isDefault = typeKey === 'home';
+          return '<div class="page-type-card' + (isExisting ? ' disabled' : '') + (isDefault && !isExisting ? ' selected' : '') + '" data-type="' + typeKey + '"' + (isExisting ? ' title="该类型主页面已存在"' : '') + '>' +
+            '<div class="type-name">' + config.name + '</div>' +
+            '</div>';
+        }).join('');
+
+        container.querySelectorAll('.page-type-card:not(.disabled)').forEach(function (card) {
+          card.addEventListener('click', function () {
+            container.querySelectorAll('.page-type-card').forEach(function (c) { c.classList.remove('selected'); });
+            this.classList.add('selected');
+            addPageModalState.selectedType = this.dataset.type;
+            addPageModalState.selectedTemplate = null;
+            renderAddPageTemplates(this.dataset.type);
+            updateAddPageConfirmButton();
+          });
+        });
+
+        // 初始更新按钮状态
+        updateAddPageConfirmButton();
+      }
+
+      function renderAddPageTemplates(typeKey) {
+        const section = document.getElementById('template-select-section');
+        const container = document.getElementById('template-select-list');
+        if (!container || !typeKey) return;
+
+        const config = PAGE_TYPE_CONFIG[typeKey];
+        if (!config) return;
+
+        section.style.display = 'block';
+
+        // 生成 CSS 手机预览占位符
+        function getMockPreviewHtml(templateId) {
+          if (templateId === 'home-standard') {
+            return '<div class="phone-preview-mock home-style">' +
+              '<div class="mock-statusbar">9:41</div>' +
+              '<div class="mock-header"><div class="mock-header-search"></div></div>' +
+              '<div class="mock-content">' +
+                '<div class="mock-banner"></div>' +
+                '<div class="mock-grid">' +
+                  '<div class="mock-grid-item"><div class="mock-icon"></div><div class="mock-text"></div></div>' +
+                  '<div class="mock-grid-item"><div class="mock-icon"></div><div class="mock-text"></div></div>' +
+                  '<div class="mock-grid-item"><div class="mock-icon"></div><div class="mock-text"></div></div>' +
+                  '<div class="mock-grid-item"><div class="mock-icon"></div><div class="mock-text"></div></div>' +
+                  '<div class="mock-grid-item"><div class="mock-icon"></div><div class="mock-text"></div></div>' +
+                '</div>' +
+                '<div class="mock-list">' +
+                  '<div class="mock-list-item"><div class="mock-list-item-img"></div><div class="mock-list-item-text"><span></span><span></span></div></div>' +
+                  '<div class="mock-list-item"><div class="mock-list-item-img"></div><div class="mock-list-item-text"><span></span><span></span></div></div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="mock-back-top"></div>' +
+            '</div>';
+          } else if (templateId === 'category-level3' || templateId === 'category-level2') {
+            return '<div class="phone-preview-mock category-style">' +
+              '<div class="mock-statusbar">9:41</div>' +
+              '<div class="mock-header"><div class="mock-header-search"></div></div>' +
+              '<div class="mock-content">' +
+                '<div class="mock-sidebar"><span></span><span></span><span></span><span></span><span></span></div>' +
+                '<div class="mock-main">' +
+                  '<div class="mock-grid">' +
+                    '<div class="mock-grid-item"></div><div class="mock-grid-item"></div><div class="mock-grid-item"></div>' +
+                    '<div class="mock-grid-item"></div><div class="mock-grid-item"></div><div class="mock-grid-item"></div>' +
+                  '</div>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          } else if (templateId === 'product-standard') {
+            return '<div class="phone-preview-mock">' +
+              '<div class="mock-statusbar">9:41</div>' +
+              '<div class="mock-header"><div class="mock-header-search"></div></div>' +
+              '<div class="mock-content">' +
+                '<div class="mock-banner" style="height:40px;"></div>' +
+                '<div class="mock-list">' +
+                  '<div class="mock-list-item"><div class="mock-list-item-img" style="width:14px;height:14px;"></div><div class="mock-list-item-text"><span></span><span></span></div></div>' +
+                  '<div class="mock-list-item"><div class="mock-list-item-img" style="width:14px;height:14px;"></div><div class="mock-list-item-text"><span></span><span></span></div></div>' +
+                  '<div class="mock-list-item"><div class="mock-list-item-img" style="width:14px;height:14px;"></div><div class="mock-list-item-text"><span></span><span></span></div></div>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          } else if (templateId === 'cart-standard') {
+            return '<div class="phone-preview-mock cart-style">' +
+              '<div class="mock-statusbar">9:41</div>' +
+              '<div class="mock-header" style="background:#fff;border-bottom:1px solid #f0f0f0;"></div>' +
+              '<div class="mock-content">' +
+                '<div class="mock-cart-item"><div class="mock-cart-item-img"></div><div class="mock-cart-item-info"><span></span><span></span></div></div>' +
+                '<div class="mock-cart-item"><div class="mock-cart-item-img"></div><div class="mock-cart-item-info"><span></span><span></span></div>' +
+                '<div class="mock-cart-item"><div class="mock-cart-item-img"></div><div class="mock-cart-item-info"><span></span><span></span></div>' +
+              '</div>' +
+            '</div>';
+          } else if (templateId === 'mine-ecommerce') {
+            return '<div class="phone-preview-mock mine-style">' +
+              '<div class="mock-statusbar">9:41</div>' +
+              '<div class="mock-header" style="background:linear-gradient(135deg,#1890ff,#096dd9);height:30px;"></div>' +
+              '<div class="mock-content">' +
+                '<div class="mock-avatar"></div>' +
+                '<div class="mock-menu">' +
+                  '<div class="mock-menu-item"></div>' +
+                  '<div class="mock-menu-item"></div>' +
+                  '<div class="mock-menu-item"></div>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          }
+          return null;
+        }
+
+        container.innerHTML = config.templates.map(function (tpl, index) {
+          // 构建预览区域 - 显示原始手机比例
+          var previewHtml = '';
+          if (tpl.previewImage) {
+            previewHtml = '<div class="template-preview">' +
+              '<div class="phone-frame">' +
+                '<img src="' + tpl.previewImage + '" alt="' + tpl.name + '" onerror="this.parentElement.style.display=\'none\';this.parentElement.nextElementSibling.style.display=\'flex\';" />' +
+              '</div>' +
+              '<div class="template-preview-placeholder" style="display:none;">' +
+                '<span class="preview-icon">' + (tpl.previewIcon || '📄') + '</span>' +
+                '<span class="preview-text">预览图加载失败</span>' +
+              '</div>' +
+            '</div>';
+          } else {
+            var mockHtml = getMockPreviewHtml(tpl.id);
+            if (mockHtml) {
+              previewHtml = '<div class="template-preview">' + mockHtml + '</div>';
+            } else {
+              previewHtml = '<div class="template-preview">' +
+                '<div class="template-preview-placeholder">' +
+                  '<span class="preview-icon">' + (tpl.previewIcon || '📄') + '</span>' +
+                  '<span class="preview-text">' + tpl.name + '</span>' +
+                '</div>' +
+              '</div>';
+            }
+          }
+
+          // 构建标签
+          var tagHtml = '';
+          if (tpl.categoryPreset) {
+            var tagNames = { page1: '模板1', page2: '模板2', page3: '模板3', page4: '模板4', page5: '模板5' };
+            tagHtml = '<span class="template-tag">' + (tagNames[tpl.categoryPreset] || tpl.categoryPreset) + '</span>';
+          }
+
+          // 默认选中第一个模板
+          if (index === 0 && !addPageModalState.selectedTemplate) {
+            addPageModalState.selectedTemplate = tpl.id;
+          }
+
+          return '<div class="template-select-card' + (index === 0 ? ' selected' : '') + '" data-template="' + tpl.id + '">' +
+            previewHtml +
+            '<div class="template-info">' +
+              '<div class="template-name">' +
+                '<span class="selected-check">✓</span>' +
+                '<span>' + tpl.name + '</span>' +
+                tagHtml +
+              '</div>' +
+              '<div class="template-desc">' + tpl.desc + '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+
+        container.querySelectorAll('.template-select-card').forEach(function (card) {
+          card.addEventListener('click', function () {
+            container.querySelectorAll('.template-select-card').forEach(function (c) { c.classList.remove('selected'); });
+            this.classList.add('selected');
+            addPageModalState.selectedTemplate = this.dataset.template;
+            updateAddPageConfirmButton();
+          });
+        });
+
+        updateAddPageConfirmButton();
+      }
+
+      function updateAddPageConfirmButton() {
+        const confirmBtn = document.getElementById('btn-add-page-confirm');
+        if (confirmBtn) {
+          confirmBtn.disabled = !addPageModalState.selectedType || !addPageModalState.selectedTemplate;
+        }
+      }
+
+      function createPageFromTemplate() {
+        if (!addPageModalState.selectedType || !addPageModalState.selectedTemplate) return;
+
+        const config = PAGE_TYPE_CONFIG[addPageModalState.selectedType];
+        const template = config.templates.find(function (t) { return t.id === addPageModalState.selectedTemplate; });
+        if (!template) return;
+
+        const pageCount = pageStore.filter(function (p) { return p.pageType === 'main'; }).length + 1;
+        const newPage = {
+          id: 'page-' + Date.now(),
+          name: template.name + (pageCount > 1 ? ' ' + pageCount : ''),
+          desc: config.name + ' - ' + template.name,
+          isDefault: false,
+          pageType: 'main',
+          pageCategory: addPageModalState.selectedType,
+          floors: template.floors ? JSON.parse(JSON.stringify(template.floors)) : [],
+        };
+
+        // 如果是分类页模板，添加 categoryPreset
+        if (template.categoryPreset) {
+          newPage.floors = [{
+            id: 'floor-category-' + Date.now(),
+            type: 'category-showcase',
+            name: '分类页内容',
+            desc: template.desc,
+            categoryPreset: template.categoryPreset,
+          }];
+        }
+
+        pageStore.push(newPage);
+        currentPageId = newPage.id;
+        selectedFloorId = '';
+
+        closeAddPageModal();
+        renderPagesPanel();
+        renderCanvas();
+        renderComponentPropsPanel();
+        renderTabbar();
+        renderTabConfigPanel();
+      }
+
+      // 弹窗确认按钮事件
+      document.getElementById('btn-add-page-confirm')?.addEventListener('click', function () {
+        // 校验：各页面类型的主页面仅允许存在1个
+        const existingTypes = getExistingMainPageTypes();
+        if (existingTypes.indexOf(addPageModalState.selectedType) !== -1) {
+          alert('该类型主页面已存在，每个页面类型仅允许创建一个主页面。');
+          return;
+        }
+        createPageFromTemplate();
+      });
+
+      // 弹窗关闭事件
+      document.querySelectorAll('#modal-add-page .modal-close, #modal-add-page .modal-cancel').forEach(function (btn) {
+        btn.addEventListener('click', closeAddPageModal);
+      });
+
+      document.getElementById('modal-add-page')?.addEventListener('click', function (e) {
+        if (e.target === this) closeAddPageModal();
+      });
+
+      if (btnAddTab) {
+        btnAddTab.addEventListener('click', function () {
+          if (tabItems.length >= 5) return;
+          const nextIndex = tabItems.length + 1;
+          tabItems = tabItems.map(function (tab) {
+            return {
+              id: tab.id,
+              name: tab.name,
+              active: false,
+              targetPageId: tab.targetPageId,
+              defaultIconUrl: tab.defaultIconUrl,
+              activeIconUrl: tab.activeIconUrl,
+            };
+          });
+          tabItems.push({
+            id: 'tab-' + Date.now(),
+            name: nextIndex === 1 ? '首页' : 'Tab' + nextIndex,
+            active: true,
+            targetPageId: currentPageId,
+            defaultIconUrl: '',
+            activeIconUrl: '',
+          });
+          renderTabbar();
+          renderTabConfigPanel();
+        });
+      }
+
+      if (btnRemoveTab) {
+        btnRemoveTab.addEventListener('click', function () {
+          if (tabItems.length <= 1) return;
+          const activeIndex = tabItems.findIndex(function (tab) { return tab.active; });
+          tabItems = tabItems.filter(function (_, index) { return index !== activeIndex; });
+          if (!tabItems.some(function (tab) { return tab.active; })) {
+            tabItems[tabItems.length - 1].active = true;
+          }
+          renderTabbar();
+          renderTabConfigPanel();
+        });
+      }
+
+      if (btnCanvasUp) {
+        btnCanvasUp.addEventListener('click', function () {
+          if (!selectedFloorId) return;
+          moveFloorUp(selectedFloorId);
+          syncFloorViews();
+        });
+      }
+
+      if (btnCanvasDown) {
+        btnCanvasDown.addEventListener('click', function () {
+          if (!selectedFloorId) return;
+          moveFloorDown(selectedFloorId);
+          syncFloorViews();
+        });
+      }
+
+      if (btnCanvasCopy) {
+        btnCanvasCopy.addEventListener('click', function () {
+          if (!selectedFloorId) return;
+          duplicateFloor(selectedFloorId);
+          syncFloorViews();
+        });
+      }
+
+      if (btnCanvasDelete) {
+        btnCanvasDelete.addEventListener('click', function () {
+          if (!selectedFloorId) return;
+          deleteFloor(selectedFloorId);
+          syncFloorViews();
+        });
+      }
+
+      // 页面布局左侧操作按钮事件
+      if (btnLayoutUp) {
+        btnLayoutUp.addEventListener('click', function () {
+          if (!selectedFloorId || selectedFloorId === '__top_nav__' || selectedFloorId === '__bottom_nav__') return;
+          moveFloorUp(selectedFloorId);
+          syncFloorViews();
+          renderPageLayoutSideActions();
+        });
+      }
+
+      if (btnLayoutDown) {
+        btnLayoutDown.addEventListener('click', function () {
+          if (!selectedFloorId || selectedFloorId === '__top_nav__' || selectedFloorId === '__bottom_nav__') return;
+          moveFloorDown(selectedFloorId);
+          syncFloorViews();
+          renderPageLayoutSideActions();
+        });
+      }
+
+      if (btnLayoutCopy) {
+        btnLayoutCopy.addEventListener('click', function () {
+          if (!selectedFloorId || selectedFloorId === '__top_nav__' || selectedFloorId === '__bottom_nav__') return;
+          duplicateFloor(selectedFloorId);
+          syncFloorViews();
+          renderPageLayoutSideActions();
+        });
+      }
+
+      if (btnLayoutDelete) {
+        btnLayoutDelete.addEventListener('click', function () {
+          if (!selectedFloorId || selectedFloorId === '__top_nav__' || selectedFloorId === '__bottom_nav__') return;
+          deleteFloor(selectedFloorId);
+          syncFloorViews();
+          renderPageLayoutSideActions();
+        });
+      }
+
+      [
+        [tabbarDefaultColorInput, 'defaultColor', 'change'],
+        [tabbarActiveColorInput, 'activeColor', 'change'],
+        [tabbarFontSizeInput, 'fontSize', 'input'],
+        [tabbarBgColorInput, 'backgroundColor', 'change'],
+        [tabbarHeightInput, 'height', 'input'],
+        [tabbarBorderColorInput, 'borderColor', 'change'],
+        [tabbarIconGapInput, 'iconGap', 'input'],
+      ].forEach(function (entry) {
+        const input = entry[0];
+        const key = entry[1];
+        const eventName = entry[2];
+        if (input) {
+          input.addEventListener(eventName, function () {
+            const value = key === 'fontSize' || key === 'height' || key === 'iconGap' ? Number(this.value) : this.value;
+            tabbarConfig[key] = value;
+            renderTabbar();
+          });
+        }
+      });
+
+      if (tabbarShowTextInput) {
+        tabbarShowTextInput.addEventListener('change', function () {
+          tabbarConfig.showText = this.checked;
+          renderTabbar();
+        });
+      }
+
+      // 页面布局列表滚动时更新操作按钮位置
+      document.getElementById('page-layout-list')?.addEventListener('scroll', function () {
+        renderPageLayoutSideActions();
+      });
+
+      renderSidePanel();
+      renderCanvas();
+      renderComponentPropsPanel();
+      renderCanvasSideActions();
+      renderTabbar();
+      renderTabConfigPanel();
+      applyMallTheme();
+      initImagePickerModal(); // 初始化素材库弹窗
+      initSingleProductModal(); // 初始化单商品选择弹窗
+    })();
