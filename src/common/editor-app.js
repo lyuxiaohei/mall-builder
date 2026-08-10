@@ -1270,8 +1270,8 @@
           defaultConfig: {
             // 图片配置
             slides: [
-              { image: '../assets/banner素材.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
-              { image: '../assets/banner素材2.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '../../assets/banner素材.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
+              { image: '../../assets/banner素材2.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' },
             ],
             // 风格设置
             styleMode: 'standard', // standard 标准, immersive 沉浸式
@@ -1684,7 +1684,7 @@
           templates: [
             { id: 'home-standard', name: '标准首页', desc: '包含搜索框、轮播图、图文导航、商品推荐、置顶功能等模块', previewIcon: '📱', floors: [
               { id: 'floor-search', type: 'search-bar', name: '搜索框', desc: '顶部搜索入口', searchBarConfig: { placeholder: '搜索商品、优惠券、活动', backgroundColor: '#f3f6fb', borderRadius: 17, height: 34, showScanIcon: false, showVoiceIcon: false } },
-              { id: 'floor-carousel', type: 'carousel', name: '轮播图', desc: '主视觉焦点图', carouselConfig: { slides: [{ image: '../assets/banner素材.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' }, { image: '../assets/banner素材2.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' }], height: 180, borderRadius: 8, cornerStyle: 'rounded', autoplay: true, interval: 3000, dotStyle: 'round', dotPosition: 'bottom', backgroundColor: '#ffffff' } },
+              { id: 'floor-carousel', type: 'carousel', name: '轮播图', desc: '主视觉焦点图', carouselConfig: { slides: [{ image: '../../assets/banner素材.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' }, { image: '../../assets/banner素材2.jpg', jumpType: 'none', jumpTarget: '', extendHeight: 0, extendMode: 'copy', extendImage: '' }], height: 180, borderRadius: 8, cornerStyle: 'rounded', autoplay: true, interval: 3000, dotStyle: 'round', dotPosition: 'bottom', backgroundColor: '#ffffff' } },
               { id: 'floor-icon-nav', type: 'icon-nav', name: '图文导航', desc: '核心功能入口导航', iconNavConfig: { template: 'image-nav', layoutStyle: 'fixed', rows: 1, navItems: [{ icon: '⚡', image: '', text: '限时秒杀', link: '' }, { icon: '🏷️', image: '', text: '品牌特卖', link: '' }, { icon: '🆕', image: '', text: '新品上市', link: '' }, { icon: '🔥', image: '', text: '热销榜', link: '' }, { icon: '🎫', image: '', text: '领券中心', link: '' }], backgroundColor: '#ffffff', textColor: '#333333', textSize: 12 } },
               { id: 'floor-goods', type: 'goods-list', name: '商品推荐', desc: '商品列表展示', goodsListConfig: { listStyle: 'large-single', dataSource: 'brand', sortType: 'comprehensive', backgroundColor: '#ffffff', showSpuName: true, showSkuSpec: true, showPrice: true, showTag: false, cartStyle: 'style1', cornerTag: 'none', customCornerTag: '', goodsCount: 20 } },
               { id: 'floor-float-btn', type: 'float-button', name: '悬浮组件', desc: '悬浮功能按钮', floatButtonConfig: { position: 'right', bottomMargin: 80, buttonGap: 12, buttons: [{ id: 'btn-1', type: 'back-top', enabled: true, name: '置顶', backgroundColor: '#ff6b35', iconColor: '#ffffff', buttonSize: 44, borderRadius: 50, jumpType: 'none', jumpTarget: '' }] } },
@@ -1697,9 +1697,9 @@
           templates: [
             { id: 'category-level3', name: '三级分类页', desc: '左侧一级分类 + 右侧二级分组与三级图标网格', categoryPreset: 'page1', previewIcon: '📑' },
             { id: 'category-level2', name: '二级分类页', desc: '左侧一级分类 + 右侧二级图标网格', categoryPreset: 'page2', previewIcon: '📋' },
-            { id: 'category-level2-list', name: '二级分类+商品列表', desc: '左侧一级分类 + 右侧 Tab 子分类 + 商品列表', categoryPreset: 'page3', previewImage: '../assets/category-page3-ref.png' },
-            { id: 'category-level1-tab', name: '一级分类（横向Tab）', desc: '顶部横向 Tab 子分类 + 商品列表', categoryPreset: 'page4', previewImage: '../assets/category-page4-ref.png' },
-            { id: 'category-level1-list', name: '一级分类（直接列表）', desc: '左侧一级分类 + 右侧直接商品列表', categoryPreset: 'page5', previewImage: '../assets/category-page5-ref.png' },
+            { id: 'category-level2-list', name: '二级分类+商品列表', desc: '左侧一级分类 + 右侧 Tab 子分类 + 商品列表', categoryPreset: 'page3', previewImage: '../../assets/category-page3-ref.png' },
+            { id: 'category-level1-tab', name: '一级分类（横向Tab）', desc: '顶部横向 Tab 子分类 + 商品列表', categoryPreset: 'page4', previewImage: '../../assets/category-page4-ref.png' },
+            { id: 'category-level1-list', name: '一级分类（直接列表）', desc: '左侧一级分类 + 右侧直接商品列表', categoryPreset: 'page5', previewImage: '../../assets/category-page5-ref.png' },
           ]
         },
         mine: {
