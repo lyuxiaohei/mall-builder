@@ -1,5 +1,5 @@
 /**
- * 商城搭建系统 - 原型演示用 mock 数据
+ * Mall Builder - Mock 数据
  */
 
 /** @type {Array<{id: string, name: string, status: 'draft'|'published'|'pushed', tags: string[], updatedAt: string, useCount: number}>} */
