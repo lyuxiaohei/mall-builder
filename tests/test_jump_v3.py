@@ -1,7 +1,7 @@
 from playwright.sync_api import sync_playwright
 import os
 
-output_dir = r'C:\Users\Administrator\Documents\qoder_project\mall-builder-prototype\docs'
+output_dir = r'C:\Users\Administrator\Documents\qoder_project\mall-builder\docs'
 os.makedirs(output_dir, exist_ok=True)
 
 with sync_playwright() as p:
@@ -11,7 +11,7 @@ with sync_playwright() as p:
 
     print("=== Testing Jump Type Dropdown Functionality ===")
 
-    file_path = r'C:\Users\Administrator\Documents\qoder_project\mall-builder-prototype\preview\editor.html'
+    file_path = r'C:\Users\Administrator\Documents\qoder_project\mall-builder\preview\editor.html'
     page.goto('file:///' + file_path.replace('\\', '/'))
     page.wait_for_load_state('networkidle')
     page.wait_for_timeout(3000)

@@ -2,7 +2,7 @@ from playwright.sync_api import sync_playwright
 import os
 
 # Output directory for screenshots
-output_dir = r'C:\Users\Administrator\Documents\qoder_project\mall-builder-prototype\docs'
+output_dir = r'C:\Users\Administrator\Documents\qoder_project\mall-builder\docs'
 os.makedirs(output_dir, exist_ok=True)
 
 with sync_playwright() as p:

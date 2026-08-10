@@ -5,7 +5,7 @@ with sync_playwright() as p:
     page = browser.new_page()
     page.set_viewport_size({"width": 1400, "height": 900})
 
-    file_path = r'C:\Users\Administrator\Documents\qoder_project\mall-builder-prototype\preview\editor.html'
+    file_path = r'C:\Users\Administrator\Documents\qoder_project\mall-builder\preview\editor.html'
     page.goto('file:///' + file_path.replace('\\', '/'))
     page.wait_for_load_state('networkidle')
     page.wait_for_timeout(3000)

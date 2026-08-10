@@ -3,7 +3,7 @@ import os
 import time
 
 # Output directory for screenshots
-output_dir = r'C:\Users\Administrator\Documents\qoder_project\mall-builder-prototype\docs'
+output_dir = r'C:\Users\Administrator\Documents\qoder_project\mall-builder\docs'
 os.makedirs(output_dir, exist_ok=True)
 
 with sync_playwright() as p:
@@ -13,7 +13,7 @@ with sync_playwright() as p:
 
     print("1. Navigate to editor.html...")
     # Use file:// URL since the server is having issues with path
-    file_path = r'C:\Users\Administrator\Documents\qoder_project\mall-builder-prototype\preview\editor.html'
+    file_path = r'C:\Users\Administrator\Documents\qoder_project\mall-builder\preview\editor.html'
     page.goto(f'file://{file_path}')
     page.wait_for_load_state('networkidle')
     page.wait_for_timeout(3000)
