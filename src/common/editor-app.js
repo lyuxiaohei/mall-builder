@@ -4,6 +4,11 @@
  * (内部用 const 别名引用 MallBuilder.data.*)。
  * 后续 Phase 3 将逐步把组件逻辑拆到 common/components/*.js。 */
     (function () {
+      // Phase 3: 薄壳 html(editor.html/pages/*.html/components/*.html)不含静态骨架,
+      // 由 common/skeleton.js 自动注入共享 chrome, 保证'通用页面骨架一致'。
+      if (!document.querySelector('.editor-page') && window.MallBuilder && MallBuilder.skeleton) {
+        MallBuilder.skeleton.render(document.body);
+      }
       const params = new URLSearchParams(window.location.search);
       const name = params.get('name') || '未命名模板';
       document.getElementById('editor-title').textContent = name;
@@ -11362,4 +11367,51 @@
       applyMallTheme();
       initImagePickerModal(); // 初始化素材库弹窗
       initSingleProductModal(); // 初始化单商品选择弹窗
+
+      // ===== Phase 3: 多页架构 config 钩子 =====
+      // 薄壳 html 通过 window.__EDITOR_CONFIG__ 声明模式, 此处据此预置页面/组件:
+      //   {mode:'page-editor', pageType:'home'|'category'|'mine'|..., pageName?}
+      //   {mode:'component-playground', componentType:'carousel'|..., componentName?}
+      (function applyEditorConfig() {
+        var cfg = window.__EDITOR_CONFIG__;
+        if (!cfg) return;
+        var CONFIG_KEY_MAP = {
+          'carousel': 'carouselConfig', 'goods-list': 'goodsListConfig', 'goods-group': 'goodsGroupConfig',
+          'search-bar': 'searchBarConfig', 'rich-text': 'richTextConfig', 'title': 'titleConfig',
+          'text': 'textConfig', 'link': 'linkConfig', 'big-bg-image': 'bigBgImageConfig',
+          'icon-nav': 'iconNavConfig', 'float-button': 'floatButtonConfig', 'elevator-nav': 'elevatorNavConfig',
+          'personal-recommend': 'personalRecommendConfig', 'custom-component': 'customComponentConfig',
+          'mine-nav-grid': 'mineNavGridConfig', 'mine-menu-list': 'mineMenuListConfig',
+        };
+        function emptyPage(name, category) {
+          var p = { id: 'page-' + Date.now(), name: name || '页面', desc: '', isDefault: false, pageType: 'main', pageCategory: category || 'custom', floors: [] };
+          pageStore.push(p); currentPageId = p.id; selectedFloorId = '';
+          return p;
+        }
+        function renderAll() {
+          renderPagesPanel(); renderCanvas(); renderComponentPropsPanel();
+          renderCanvasSideActions(); renderTabbar(); renderTabConfigPanel();
+        }
+        if (cfg.mode === 'page-editor' && cfg.pageType) {
+          var ptc = PAGE_TYPE_CONFIG[cfg.pageType];
+          if (ptc && ptc.templates && ptc.templates[0]) {
+            addPageModalState.selectedType = cfg.pageType;
+            addPageModalState.selectedTemplate = ptc.templates[0].id;
+            createPageFromTemplate();
+          } else {
+            emptyPage(cfg.pageName || (ptc && ptc.name) || '自定义页面', cfg.pageType);
+            renderAll();
+          }
+        } else if (cfg.mode === 'component-playground' && cfg.componentType) {
+          if (!getComponentByType(cfg.componentType)) return;
+          var p = emptyPage(cfg.componentName || '组件预览', 'custom');
+          var comp = getComponentByType(cfg.componentType);
+          var floor = { id: 'floor-' + Date.now(), type: comp.type, name: comp.name, desc: comp.previewLabel || comp.name };
+          var key = CONFIG_KEY_MAP[comp.type];
+          if (comp.defaultConfig && key) floor[key] = JSON.parse(JSON.stringify(comp.defaultConfig));
+          p.floors.push(floor);
+          selectedFloorId = floor.id;
+          renderAll();
+        }
+      })();
     })();
