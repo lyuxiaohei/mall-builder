@@ -7,10 +7,10 @@
 > **所有页面都支持直接双击在浏览器打开（file://），无需启动任何本地服务器。**
 
 ### 方式一：直接双击打开（推荐，无需服务器）
-双击 `src/page-index.html`（原型总入口，导航到所有页面/组件），或直接双击 `src/pages/` 下任意一个页面：
-- `src/page-index.html` — **原型总入口**（目录页；同名 `page-index.md` 是其文本目录，便于编辑/版本追踪）
+双击根目录的 `index.html` 或 `page-index.html`，或直接双击 `src/pages/` 下任意一个页面：
+- `index.html` — **运营工作台**（模板/商城/推送记录）
+- `page-index.html` — **原型总入口**（目录页，导航到所有页面/组件；同名 `page-index.md` 是其文本目录）
 - `src/pages/editor.html` — 完整编辑器（空画布）
-- `src/pages/index.html` — 运营工作台（模板管理）
 - `src/pages/material-library.html` — 素材库（后台规范）
 - `src/pages/page-{home,category,mine,product-detail,cart,custom}.html` — 每个页面类型一个（共 6 个）
 - `src/pages/comp-*.html` — 每个组件类型一个（共 16 个）
@@ -26,7 +26,7 @@ python -m http.server 8080
 npx http-server -p 8080
 ```
 
-然后访问 http://localhost:8080/src/page-index.html 。
+然后访问 http://localhost:8080/page-index.html （或 http://localhost:8080/index.html ）。
 
 ### 方式三：VS Code Live Server
 1. 安装 VS Code 的 Live Server 扩展
@@ -81,9 +81,11 @@ npx http-server -p 8080
 
 ```
 mall-builder/
+├── index.html                 # 运营工作台（模板/商城/推送记录）
+├── page-index.html            # 原型总入口（可视化目录，双击打开）
+├── page-index.md              # 同名 markdown 目录（易编辑/版本追踪）
+├── README.md
 ├── src/                       # 源码
-│   ├── page-index.html        # 原型总入口（可视化目录，双击打开）
-│   ├── page-index.md          # 同名 markdown 目录（易编辑/版本追踪）
 │   ├── styles.css             # 全局样式 + :root 设计 token（权威源）
 │   ├── app.js / data.js       # 工作台专属逻辑与 Mock 数据
 │   ├── common/                # 共享层（所有编辑器页面复用）
@@ -92,26 +94,25 @@ mall-builder/
 │   │   ├── namespace.js       # window.MallBuilder 命名空间 + 组件注册表
 │   │   ├── editor-app.js      # 编辑器全部应用逻辑（原内联 IIFE）
 │   │   └── data/              # Mock 数据（taxonomy / material-library / goods）
-│   └── pages/                 # 所有可运行页面 html（25 个）
-│       ├── editor.html  index.html  material-library.html
+│   └── pages/                 # 可运行页面 html（24 个）
+│       ├── editor.html  material-library.html
 │       ├── page-{home,category,mine,product-detail,cart,custom}.html  # 6 个页面类型
 │       └── comp-*.html        # 16 个组件 playground
 ├── assets/                    # 静态资源（图片素材，页面用 ../../assets/ 引用）
 ├── docs/                      # 项目文档（PRD / 组件配置 / 功能清单）
 ├── tests/                     # Playwright 脚本与截图
-├── archive/
-│   └── legacy-root-copies/    # Phase 0 归档的根目录陈旧副本
-└── README.md
+└── archive/
+    └── legacy-root-copies/    # Phase 0 归档的根目录陈旧副本
 ```
 
 ## 文件说明
 
 | 文件 | 说明 |
 |------|------|
-| `src/page-index.html` | 原型总入口（可视化目录），双击打开导航到所有页面 |
-| `src/page-index.md` | 同名 markdown 目录（页面/组件清单，易编辑） |
+| `index.html` | 运营工作台（模板列表、商城列表、推送记录） |
+| `page-index.html` | 原型总入口（可视化目录），双击打开导航到所有页面 |
+| `page-index.md` | 同名 markdown 目录（页面/组件清单，易编辑） |
 | `src/pages/editor.html` | 完整编辑器（19 行薄壳，外壳由 `common/skeleton.js` 注入） |
-| `src/pages/index.html` | 运营工作台（模板列表、商城列表、推送记录） |
 | `src/pages/material-library.html` | 素材库（后台规范） |
 | `src/pages/page-*.html` | 每个页面类型一个 html（home/category/mine/product-detail/cart/custom，共 6 个） |
 | `src/pages/comp-*.html` | 每个组件类型一个 html playground（16 个） |

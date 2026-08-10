@@ -570,7 +570,7 @@
     } else {
       name = id === 'new' ? '新建模板' : (MOCK_TEMPLATES.find((t) => t.id === id) || {}).name || id;
     }
-    const url = new URL('editor.html', window.location.href);
+    const url = new URL('src/pages/editor.html', window.location.href);
     url.searchParams.set('id', id);
     url.searchParams.set('name', name);
     if (options && options.categoryTemplate) {
